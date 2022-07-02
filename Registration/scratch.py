@@ -12,6 +12,7 @@ import datetime
 import numpy as np
 from csv import writer
 from multiprocessing import Manager
+from datetime import datetime, date
 
 # activate_geo_locator: bool = True
 
@@ -48,10 +49,10 @@ output_dir = "C:/Users/ashetty/Desktop/DeX/Diamond/CRL/Transformed/"
 exception_column_list = ["error"]
 master_column_list = ["filename"]
 
-list_of_files = glob.glob(base_dir + input_dir + "*")
-# print(list_of_files)
-next(list_of_files)
-print("a")
+# list_of_files = glob.glob(base_dir + input_dir + "*")
+# # print(list_of_files)
+# next(list_of_files)
+# print("a")
 # files = []
 # flg = 0
 # for idx in range(len(list_of_files)):
@@ -62,6 +63,92 @@ print("a")
 #         files = []
 #         flg = 0
 # print(files)
+
+
+# def log_correction(c_file):
+#     new_file = c_file.split(".")[0] + "_1.log"
+#     with open(c_file) as f:
+#         reader = csv.reader(f)
+#         data = list(reader)
+#         flat_list = [x for xs in data for x in xs]
+#         for i in range(len(flat_list)):
+#             flat_list[i] = str(flat_list[i]).replace('|"', '| "')
+#     with open(new_file, "w", newline="") as nf:
+#         write = csv.writer(nf)
+#         write.writerows(flat_list)
+#
+#
+# log_correction('C:\\Users\\ashetty\\Desktop\\FastestFinger\\IIBF\\raw\\rack1\\10-Jan-2021_0900-1030_1002\\5208693-5192-N.log')
+
+dataframe = (pd.read_csv(
+    'C:\\Users\\ashetty\\Desktop\\FastestFinger\\IIBF\\raw\\rack1\\10-Jan-2021_0900-1030_1002\\5208693-5192-N.log',
+    # 'C:\\Users\\ashetty\\Desktop\\FastestFinger\\IIBF\\raw\\rack1\\10-Jan-2021_0900-1030_1002\\MU631312903-168759-N.log',
+    delimiter='|', quoting=3,
+    names=[
+        "Timestamp",
+        "Section Name",
+        "QuestionID",
+        "CurrentQuestionNumber",
+        "OptionSelected",
+        "AlternateOptionSelected",
+        "Bookmark",
+        "SectionalQuestionNumber",
+        "IPAddress",
+        "Action",
+        "SequenceNumber",
+        "Candidate MachineDateTime",
+        "Timer",
+        # "MAC"
+    ], low_memory=False
+    ) .reset_index(drop=True))
+
+uni_q = {'21': 'info, 192, 01:11', '33': 'info, 192, 01:01'}
+
+if '21' in list(uni_q.keys()):
+    uni_q['21'] = ['info, 192, 01:10']
+print(uni_q)
+# max = -9999
+# min = 0
+#
+# for i in range(len(A)):
+#     min = min + A[i]
+#
+#     if max < min:
+#         max = min
+#     if min < 0:
+#         min =0
+# print(max)
+
+# for i in range(len(A)):
+#     for j in range(i+1, len(A)):
+#         if A[i] > A[j]:
+#             A[i], A[j] = A[j], A[i]
+# print(A)
+
+# i = 0
+# j = len(A) - 1
+
+# while(i < j):
+#     A[i], A[j] = A[j], A[i]
+#     i += 1
+#     j -= 1
+# print(A)
+# B = [12, 13, 6]
+# C = []
+#
+# for j in range(len(B)):
+#     for i in range(len(A)):
+#         if A[i] == B[j]:
+#             C.append(A[i])
+#             break
+# print(C)
+
+# x = A[0]
+# for i in range(len(A)-1, 1, -1):
+#     A[i] = A[i-1]
+#
+# A[len(A) - 1] = x
+# print(A)
 
 # def process_file(file_path, question_dict, master_dict):
 #     try:

@@ -1,5 +1,5 @@
 import csv
-import datetime
+from datetime import datetime, timedelta
 import glob
 import os
 import traceback
@@ -54,15 +54,14 @@ def log_message(message, level, name):
 
 log_setup(
     "INFO",
-    datetime.datetime.today().strftime("%d%m%Y") + "_process_executed.log",
+    datetime.today().strftime("%d%m%Y") + "_process_executed.log",
     "info",
 )
 log_setup(
-    "ERROR", datetime.datetime.today().strftime("%d%m%Y") + "_errors.log", "error"
+    "ERROR", datetime.today().strftime("%d%m%Y") + "_errors.log", "error"
 )
 
 
-@profile
 def process_file(file_path, question_dict, master_dict, count_list):
     try:
         Master_files = pd.read_csv(output_dir + "Master.csv")
@@ -119,9 +118,10 @@ def process_file(file_path, question_dict, master_dict, count_list):
                                 )
                                     .reset_index(drop=True)
                             )
-                            if 'reappear' in str(dataframe['IPAddress']) or 'absent' in str(dataframe['IPAddress']):
-                                print("here")
-                                x = 'reappear/absent'
+                            # if 'reappear' in str(dataframe['IPAddress']) or 'absent' in str(dataframe['IPAddress']):
+                            #     # print("here")
+                            #     x = 'reappear/absent'
+                            res = [i for i in list(dataframe['IPAddress']) if terms[0] in i]
                             dataframe = dataframe.dropna()
                             input_csv_data = dataframe.values.tolist()
                             output_row = []
@@ -134,7 +134,7 @@ def process_file(file_path, question_dict, master_dict, count_list):
                                     output_row = [client_id, eed_id, exam_id]
                                     output_row.extend(item)
                                     output_row.append(Value)
-                                    if x == 'reappear/absent':
+                                    if res:
                                         output_row.append('Reappear/Absent')
                                     else:
                                         output_row.append('Appeared-Attempted')
@@ -145,9 +145,9 @@ def process_file(file_path, question_dict, master_dict, count_list):
                                 else:
                                     continue
                                 if key_ques in question_dict.keys():
-                                    output_row.append(question_dict[key_ques][2])
-                                    output_row.append(question_dict[key_ques][3])
-                                    output_row.append(question_dict[key_ques][-1])
+                                    output_row.append(question_dict[key_ques][2])  # mdm_name
+                                    output_row.append(question_dict[key_ques][3])  # batch time
+                                    output_row.append(question_dict[key_ques][-1])  # crct_key
                                 else:
                                     output_row.extend(("", "", ""))
                                 if key_master in master_dict.keys():
@@ -160,11 +160,39 @@ def process_file(file_path, question_dict, master_dict, count_list):
                                     output_row.append(master_dict[key_master][5])
                                     output_row.append(master_dict[key_master][6])
                                     output_row.append(master_dict[key_master][7])
-                                    output_row.append(master_dict[key_master][8])
-                                    output_row.append(master_dict[key_master][9])
-                                    output_row.append(master_dict[key_master][10])
-                                    output_row.append(master_dict[key_master][11])
-                                    output_row.append(master_dict[key_master][-1])
+                                    output_row.append(master_dict[key_master][8])  # exam date
+                                    output_row.append(master_dict[key_master][9])  # batch time
+                                    output_row.append(master_dict[key_master][10])  # category(caste)
+                                    output_row.append(master_dict[key_master][11])  # PWD status
+                                    output_row.append(master_dict[key_master][-1])  # PWD time
+                                    start = datetime.strptime(master_dict[key_master][9].split('-')[0], '%H:%M')
+                                    end = datetime.strptime(master_dict[key_master][9].split('-')[1], '%H:%M')
+                                    total_time = end - start
+                                    if output_row[-2] == 'YES' and output_row[-1] == 30:
+                                        total_time += timedelta(minutes=30)
+                                    timer_elapsed = datetime.strptime(str(total_time), '%H:%M:%S') - datetime.strptime(
+                                        output_row[15], '%H:%M:%S')
+                                    output_row.append(timer_elapsed)
+                                    timer_elapsed_min = timer_elapsed.total_seconds() / 60
+                                    output_row.append(int(timer_elapsed_min))
+                                    if output_row[21] == output_row[7]:
+                                        output_row.append("Correct")
+                                    else:
+                                        output_row.append("Incorrect")
+                                    output_row.append(1) if output_row[36] == 'Correct' else output_row.append(0)
+                                    output_row.append(1) if output_row[36] == 'Incorrect' else output_row.append(0)
+                                    if output_row[35] in range(0,15) and output_row[36] == 'Correct': output_row.extend((1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+                                    if output_row[35] in range(0, 15) and output_row[36] == 'Incorrect': output_row.extend((0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+                                    if output_row[35] in range(15, 30) and output_row[36] == 'Correct': output_row.extend((0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+                                    if output_row[35] in range(15, 30) and output_row[36] == 'Incorrect': output_row.extend((0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+                                    if output_row[35] in range(30, 45) and output_row[36] == 'Correct': output_row.extend((0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+                                    if output_row[35] in range(30, 45) and output_row[36] == 'Incorrect': output_row.extend((0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+                                    if output_row[35] in range(45, 60) and output_row[36] == 'Correct': output_row.extend((0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0))
+                                    if output_row[35] in range(45, 60) and output_row[36] == 'Incorrect': output_row.extend((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0))
+                                    if output_row[35] in range(60, 75) and output_row[36] == 'Correct': output_row.extend((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0))
+                                    if output_row[35] in range(60, 75) and output_row[36] == 'Incorrect': output_row.extend((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0))
+                                    if output_row[35] in range(75, 91) and output_row[36] == 'Correct': output_row.extend((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1))
+                                    if output_row[35] in range(75, 91) and output_row[36] == 'Incorrect': output_row.extend((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1))
                             if not output_row and item:  # for not attempted single row addition
                                 if item[4] == -1:
                                     item[0] = item[0].replace('INFO - "', "")
@@ -195,11 +223,12 @@ def process_file(file_path, question_dict, master_dict, count_list):
                                         output_row.append(master_dict[key_master][5])
                                         output_row.append(master_dict[key_master][6])
                                         output_row.append(master_dict[key_master][7])
-                                        output_row.append(master_dict[key_master][8])
+                                        output_row.append(master_dict[key_master][8])  # exam date
                                         output_row.append(master_dict[key_master][9])
                                         output_row.append(master_dict[key_master][10])
                                         output_row.append(master_dict[key_master][11])
                                         output_row.append(master_dict[key_master][-1])
+                                        output_row.extend(("", "", "", "", "", "", "", ""))
                             item.clear()
                             unique_questions = {
                                 k: v
@@ -213,46 +242,69 @@ def process_file(file_path, question_dict, master_dict, count_list):
                         except Exception as ex:
                             traceback.print_exc()
                             continue
-                # output_rows.insert(
-                #     0,
-                #     [
-                #         "clientid",
-                #         "eed_id",
-                #         "examid",
-                #         "Timestamp",
-                #         "Section Name",
-                #         "QuestionID",
-                #         "CurrentQuestionNumber",
-                #         "OptionSelected",
-                #         "AlternateOptionSelected",
-                #         "Bookmark",
-                #         "SectionalQuestionNumber",
-                #         "IPAddress",
-                #         "Action",
-                #         "SequenceNumber",
-                #         "Candidate MachineDateTime",
-                #         "Timer",
-                #         "MacAddress",
-                #         "Value",
-                #         "status",
-                #         "mdm_name",
-                #         "crr_exam_batch",
-                #         "crr_crct_key",
-                #         # "Candidate Identification",
-                #         "Zone",
-                #         "State",
-                #         "City",
-                #         "Test Center ID",
-                #         "Venue Name",
-                #         "Registration Number"
-                #         "Gender",
-                #         "Exam Date",
-                #         "Exam Time",
-                #         "Category",
-                #         "PWD",
-                #         "PWD Extra Time"
-                #     ],
-                # )
+                output_rows.insert(
+                    0,
+                    [
+                        "clientid",
+                        "eed_id",
+                        "examid",
+                        "Timestamp",
+                        "Section Name",
+                        "QuestionID",
+                        "CurrentQuestionNumber",
+                        "OptionSelected",
+                        "AlternateOptionSelected",
+                        "Bookmark",
+                        "SectionalQuestionNumber",
+                        "IPAddress",
+                        "Action",
+                        "SequenceNumber",
+                        "Candidate MachineDateTime",
+                        "Timer",
+                        "MacAddress",
+                        "Value",
+                        "Attendance-status",
+                        "mdm_name",
+                        "crr_exam_batch",
+                        "crr_crct_key",
+                        # "Candidate Identification",
+                        "Zone",
+                        "State",
+                        "City",
+                        "Test Center ID",
+                        "Venue Name",
+                        "Registration Number",
+                        "Gender",
+                        "Exam Date",
+                        "Exam Time",
+                        "Category",
+                        "PWD",
+                        "PWD Extra Time",
+                        "Time_elapsed",
+                        "Time_elapsed_min",
+                        "Status",
+                        "correct_cnt",
+                        "incorrect_cnt",
+                        "0_15_correct",
+                        "0_15_incorrect",
+                        "0_15_attempted",
+                        "16_30_correct",
+                        "16_30_incorrect",
+                        "16_30_attempted",
+                        "31_45_correct",
+                        "31_45_incorrect",
+                        "31_45_attempted",
+                        "46_60_correct",
+                        "46_60_incorrect",
+                        "46_60_attempted",
+                        "61_75_correct",
+                        "61_75_incorrect",
+                        "61_75_attempted",
+                        "76_90_correct",
+                        "76_90_incorrect",
+                        "76_90_attempted",
+                    ],
+                )
 
                 read_files.append([file])
                 with open(
@@ -303,9 +355,8 @@ def create_output_files(client_value, rack_value):
             writer.writerow(master_column_list)
 
 
-@profile
 def main():
-    start_time = datetime.datetime.now()
+    start_time = datetime.now()
     diamond_client = "Diamond"  # file_path.split("/")[-1].split("_")[0].lower()
     list_of_files = glob.glob(base_dir + input_dir + "*")
     files = [file for file in list_of_files if "Master" not in file and "Exception" not in file]
@@ -365,11 +416,11 @@ def main():
     #     pool.join()
     # flat_list = [item for sublist in final_count_list for item in sublist]
     p = process_file(files[0], final_question_dict, final_master_dict, count_list)
-    print(p)
+    # print(p)
     final_count_list.extend(p)
-    # print(flat_list.count(1))
+    print(final_count_list.count(1))
     log_message(
-        "time taken: " + str(datetime.datetime.now() - start_time),
+        "time taken: " + str(datetime.now() - start_time),
         "info",
         "system_log",
     )

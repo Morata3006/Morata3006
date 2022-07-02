@@ -12,9 +12,10 @@ import logging
 # base_dir = "/data/Fastest_finger/"
 # input_dir = "Diamond/raw/CRL/"
 # output_dir = "/data/Fastest_finger/Diamond/transformed/"
-base_dir = "C:/Users/ashetty/Desktop/DeX/Diamond/CRL/Candidate_Logs/"
-input_dir = "Diamond/raw/"
-output_dir = "C:/Users/ashetty/Desktop/DeX/Diamond/CRL/Transformed/"
+base_dir = "C:\\Users\\ashetty\\Desktop\\FastestFinger\\"
+input_dir = "*\\raw\\"
+output_dir = "C:\\Users\\ashetty\\Desktop\\FastestFinger\\"
+
 exception_column_list = ["error"]
 master_column_list = ["filename"]
 log_path = "./logs/"
@@ -151,7 +152,15 @@ def process_file(file_path, question_dict, master_dict, count_list):
                                 output_row.append(master_dict[key_master][7])
                                 output_row.append(master_dict[key_master][8])
                                 output_row.append(master_dict[key_master][9])
-                                output_row.append(master_dict[key_master][-2])
+                                output_row.append(master_dict[key_master][10])
+                                output_row.append(master_dict[key_master][11])
+                                output_row.append(master_dict[key_master][12])  # PWD Time
+                                output_row.append(master_dict[key_master][13])
+                                output_row.append(master_dict[key_master][14])
+                                output_row.append(master_dict[key_master][15])
+                                output_row.append(master_dict[key_master][16])
+                                output_row.append(master_dict[key_master][17])
+                                output_row.append(master_dict[key_master][18])
                                 output_row.append(master_dict[key_master][-1])
                         if not output_row and item:  # for not attempted single row addition
                             if item[4] == -1:
@@ -186,7 +195,14 @@ def process_file(file_path, question_dict, master_dict, count_list):
                                     output_row.append(master_dict[key_master][8])
                                     output_row.append(master_dict[key_master][9])
                                     output_row.append(master_dict[key_master][10])
-                                    output_row.append(master_dict[key_master][-2])
+                                    output_row.append(master_dict[key_master][11])
+                                    output_row.append(master_dict[key_master][12])
+                                    output_row.append(master_dict[key_master][13])
+                                    output_row.append(master_dict[key_master][14])
+                                    output_row.append(master_dict[key_master][15])  # Graduation Degree
+                                    output_row.append(master_dict[key_master][16])
+                                    output_row.append(master_dict[key_master][17])
+                                    output_row.append(master_dict[key_master][18])  # Graduation Percentage
                                     output_row.append(master_dict[key_master][-1])
                         item.clear()
                         unique_questions = {
@@ -293,16 +309,14 @@ def create_output_files(client_value, rack_value):
 
 if __name__ == '__main__':
     start_time = datetime.datetime.now()
-    diamond_client = "Diamond"  # file_path.split("/")[-1].split("_")[0].lower()
     list_of_files = glob.glob(base_dir + input_dir + "*")
     files = [file for file in list_of_files if "Master" not in file and "Exception" not in file]
     for i in list_of_files:
+        diamond_client = i.split("\\")[-3]
         diamond_rack_name = i.split('\\')[-1]
         create_output_files(diamond_client, diamond_rack_name)
-    # question_template = "C:/Users/ashetty/Desktop/DeX/Diamond/QuestionPaper/29Jan_rk1_CRR2.csv"
-    # question_set = glob.glob("C:/Users/ashetty/Desktop/DeX/Diamond/QuestionPaper/sample_ques.csv")
-    question_set = glob.glob("C:/Users/ashetty/Desktop/DeX/Diamond/QuestionPaper/*.csv")
-    master_template = "C:/Users/ashetty/Desktop/DeX/Diamond/Diamond Master Running List.xlsx"
+    question_set = glob.glob(base_dir + diamond_client)
+    master_template = "C:/Users/ashetty/Desktop/DeX/Diamond/sample_master.xlsx"
     question_dataframe = pd.DataFrame(
         columns=["crr_eed_id", "eed_exm_id", "mdm_name",
                 "crr_exam_batch", "crr_qst_no","crr_crct_key"])
@@ -321,18 +335,18 @@ if __name__ == '__main__':
         question_dataframe = question_dataframe.append(question_partial)
     question_csv_data = question_dataframe.values.tolist()
     final_question_dict = {}
-    question_temp = [final_question_dict.update({diamond_client + "_" + str(item[2]) + "_" + str(item[-7]): item}) for
-                     item in
-                     question_csv_data]  # diamond_eedid_qstno
+    question_temp = [final_question_dict.update({diamond_client + "_" + str(item[1]) + "_" + str(item[-2]): item}) for
+                     item in question_csv_data]  # diamond_eedid_qstno
 
     #  master data lookup
     master_dataframe = pd.read_excel(
         master_template,
         usecols=["Candidate ID", "Zone", "State", "City", "Test Center ID", "Venue Name", "Registration No.",
                  "Gender",
-                 "Exam Date", "Exam Time", "Category", "PWD", "PWD Extra Time",],
+                 "Exam Date", "Exam Time", "Category", "PWD", "PWD Extra Time", "Total Questions", " Non-Attempted Questions",
+                 "Graduation degree name", "SSC percentage", "HSC percentage", "Graduation percentage", "Candidate Post details",],
     ).reset_index(drop=True)
-    master_dataframe.memory_usage().sum()
+    master_dataframe = master_dataframe.fillna('')
     master_csv_data = master_dataframe.values.tolist()
     final_master_dict = {}
     master_temp = [final_master_dict.update({diamond_client + "_" + str(item[0]): item}) for item in
@@ -353,15 +367,15 @@ if __name__ == '__main__':
     #         flg = 0
     count_list = []
     final_count_list = []
-    with Pool(2) as pool:
-        p = pool.starmap(process_file, zip(files, repeat(final_question_dict), repeat(final_master_dict), repeat(count_list)))
-        final_count_list.extend(p)
-        pool.close()
-        pool.terminate()
-        pool.join()
-    flat_list = [item for sublist in final_count_list for item in sublist]
-    print(flat_list.count(1))
-    # process_file(files[0], final_question_dict, final_master_dict, count_list)
+    # with Pool(2) as pool:
+    #     p = pool.starmap(process_file, zip(files, repeat(final_question_dict), repeat(final_master_dict), repeat(count_list)))
+    #     final_count_list.extend(p)
+    #     pool.close()
+    #     pool.terminate()
+    #     pool.join()
+    # flat_list = [item for sublist in final_count_list for item in sublist]
+    # print(flat_list.count(1))
+    process_file(files[0], final_question_dict, final_master_dict, count_list)
     log_message(
         "time taken: " + str(datetime.datetime.now() - start_time),
         "info",
