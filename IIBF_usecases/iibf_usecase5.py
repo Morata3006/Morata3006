@@ -20,7 +20,7 @@ output_dir = "C:\\Users\\ashetty\\Desktop\\FastestFinger\\"
 
 exception_column_list = ["error"]
 master_column_list = ["filename"]
-log_path = "./logs/"
+log_path = "C:/Users/ashetty/Desktop/DeX/logs/"
 
 
 def log_setup(name, filename, level):
@@ -80,7 +80,7 @@ def process_file(file_path, question_dict, master_dict, count_list):
             read_files = []
             output_rows = []
 
-            for sub_file in glob.glob(file + "\\*"):  # individual candidate log file
+            for sub_file in glob.glob(file + "\\5208693-5192-N.log"):  # individual candidate log file
 
                 try:
                     sub_file_output_rows_final = []
@@ -162,10 +162,13 @@ def process_file(file_path, question_dict, master_dict, count_list):
                     item.clear()
 
                     sub_file_output_rows = [value for item, value in unique_questions.items()]
+                    total_ques_reattmpt = 0
                     for index, item in enumerate(sub_file_output_rows):  # creating dictionary with question and number of attempts
                         len_dict = len(item)
                         key = sub_file_output_rows[index][-1][6]
                         ques_attmpt.update({key: len_dict})
+                        if len(item) > 1:
+                            total_ques_reattmpt += 1
                         for x in range(len(sub_file_output_rows[index])):
                             sub_file_output_rows[index][x].append(len(item))
                             if len((sub_file_output_rows[index])) > 1:
@@ -185,14 +188,12 @@ def process_file(file_path, question_dict, master_dict, count_list):
                     else:
                         avg_attmpt = 0
                     total_attmpt = sum(ques_attmpt_list)
-                    for ele in sub_file_output_rows_final:
+
+                    for ele in sub_file_output_rows_final:  # append the data to final list
                         ele.append(avg_attmpt)
                         ele.append(total_attmpt)
-                    # counter = 0
-                    # for i in ques_attmpt_list:
-                    #     if i > 1:
-                    #         counter += 1
-                    # if counter > 10:
+                        ele.append(total_ques_reattmpt)
+
                     output_rows.extend(sub_file_output_rows_final)  # output_rows has all id data stored.
                     if sub_file_output_rows:
                         count_list.append(1)
@@ -240,7 +241,8 @@ def process_file(file_path, question_dict, master_dict, count_list):
                     "Question_attmpt_cnt",
                     "Attempt_status",
                     "avg_attmept",
-                    "total_attmpt"
+                    "total_attmpt",
+                    "total_reattempted_ques"
                 ],
             )
 

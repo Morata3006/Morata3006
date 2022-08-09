@@ -6,15 +6,13 @@ import shutil
 import traceback
 from itertools import repeat
 from multiprocessing import Pool
-from statistics import mean
 import pandas as pd
 # from memory_profiler import profile
 import logging
 
-# base_dir = "/data/ff/"
-# input_dir = "raw/"
-# output_dir = "/data/ff/"
-
+# base_dir = "/data/Fastest_finger/"
+# input_dir = "Diamond/raw/CRL/"
+# output_dir = "/data/Fastest_finger/Diamond/transformed/"
 base_dir = "C:\\Users\\ashetty\\Desktop\\FastestFinger\\"
 input_dir = "raw\\"
 output_dir = "C:\\Users\\ashetty\\Desktop\\FastestFinger\\"
@@ -64,7 +62,7 @@ log_setup(
 )
 
 
-def process_file(file_path, question_dict, master_dict, count_list, pwd_list):
+def process_file(file_path, question_dict, master_dict, count_list):
     try:
 
         client_id = file_path.split("\\")[-3]
@@ -80,16 +78,11 @@ def process_file(file_path, question_dict, master_dict, count_list, pwd_list):
             file_name = file.split("\\")[-1]
             read_files = []
             output_rows = []
-            error_files = []
 
             for sub_file in glob.glob(file + "\\5208693-5192-N.log"):  # individual candidate log file
 
                 try:
                     unique_questions = {}
-                    timer_dict ={}
-                    response_min_list = []
-                    response_sec_list = []
-                    # sub_file_output_rows_final = []
                     membership_no = sub_file.split("\\")[-1].split("-")[0]  # SO711311*** (11 alphanumeric)
                     enrollment_id = sub_file.split("\\")[-1].split("-")[1]  # 218132 (6 digit)
                     dataframe = (
@@ -117,57 +110,29 @@ def process_file(file_path, question_dict, master_dict, count_list, pwd_list):
                     )
                     dataframe[['IPAddress']] = dataframe[['IPAddress']].fillna('0')
                     res = [i for i in list(dataframe['IPAddress']) if 'PC change' in i]
-                    # pwd_list = ['244492']
+
+                    # dataframe = dataframe.dropna()
                     dataframe = dataframe.dropna(subset=['Section Name'])
+                    dataframe = dataframe[(dataframe.Action == 'RS')].reset_index(drop=True)
+                    # dataframe = dataframe.drop_duplicates(subset='QuestionID', keep='last').reset_index(drop=True)
                     input_csv_data = dataframe.values.tolist()
                     item = []
+                    option_1_cnt = 0
+                    option_2_cnt = 0
+                    option_3_cnt = 0
+                    option_4_cnt = 0
                     for index, item in enumerate(input_csv_data):
                         if item[4] != -1:
                             item[0] = item[0].replace('INFO - "', "")
                             item[12] = item[12].replace('"', '')
-                            if item[12] == '00:00' and int(enrollment_id) in pwd_list:
-                                item[12] = '02:40:00'
-                            elif item[12] == '00:00':
-                                item[12] = '02:00:00'
-                            unique_key = str(item[2])
+                            if item[12] == '00:00':
+                                item[12] = '00:00:00'
+                            unique_key = str(item[2]) + '_' + str(item[10])
                             output_row = [client_id, enrollment_id, membership_no, len(res)]
                             output_row.extend(item)
-                            if index != 0:
-                                input_csv_data[index - 1][-1] = input_csv_data[index-1][-1].replace('"', '')
-                                if input_csv_data[index-1][-1] == '00:00' and int(enrollment_id) in pwd_list:
-                                    input_csv_data[index-1][-1] = '02:40:00'
-                                elif input_csv_data[index-1][-1] == '00:00':
-                                    input_csv_data[index - 1][-1] = '02:00:00'
-                                if datetime.datetime.strptime(item[12], '%H:%M:%S') > datetime.datetime.strptime(input_csv_data[index-1][-1], '%H:%M:%S'):
-                                    error_files.append(sub_file)
-                                    mod_timer = datetime.datetime.strptime(item[12], '%H:%M:%S')
-                                    # output_row.append(item[12])  # Previous Timer
-                                else:
-                                    mod_timer = datetime.datetime.strptime(input_csv_data[index-1][-1], '%H:%M:%S')
-                                    # output_row.append(input_csv_data[index - 1][-1])
-                                response_time = mod_timer - datetime.datetime.strptime(item[12], '%H:%M:%S')
-                                response_time_mins = round(response_time.total_seconds() / 60, 2)
-                                response_time_secs = response_time.total_seconds()
-                            else:
-                                if int(enrollment_id) in pwd_list:
-                                    timer = '02:40:00'
-                                else:
-                                    timer = '02:00:00'
-                                if datetime.datetime.strptime(item[12], '%H:%M:%S') > datetime.datetime.strptime(timer, '%H:%M:%S'):
-                                    error_files.append(sub_file)
-                                response_time = datetime.datetime.strptime(timer, '%H:%M:%S') - datetime.datetime.strptime(item[12], '%H:%M:%S')
-                                response_time_mins = round(response_time.total_seconds() / 60, 2)
-                                response_time_secs = response_time.total_seconds()
-                                # output_row.append(timer)
                             output_row.append(Value)
                             output_row.append('Appeared-Attempted')
                             unique_questions[unique_key] = output_row
-                            if str(item[2]) not in timer_dict.keys():  # timer dictionary with question and response time
-                                timer_dict[unique_key] = [response_time, response_time_mins, response_time_secs]
-                            else:
-                                timer_dict[unique_key][0] = timer_dict[unique_key][0] + response_time
-                                timer_dict[unique_key][1] = timer_dict[unique_key][1] + response_time_mins
-                                timer_dict[unique_key][2] = timer_dict[unique_key][2] + response_time_secs
                             key_ques = str(output_row[0]) + "_" + str(output_row[1]) + "_" + str(
                                 int(output_row[6]))  # diamond_eedid_QuestionID
                             key_master = str(output_row[0]) + "_" + str(output_row[2]) + "_" + str(output_row[1])
@@ -177,8 +142,12 @@ def process_file(file_path, question_dict, master_dict, count_list, pwd_list):
                             output_row.append(question_dict[key_ques][3])  # Medium Code
                             output_row.append("08:30-10:30")  # batch time
                             output_row.append(question_dict[key_ques][-1])  # Correct Answer
+                            if item[4] == question_dict[key_ques][-1]:
+                                output_row.append('Correct')
+                            else:
+                                output_row.append('Incorrect')
                         else:
-                            output_row.extend(("NA", "NA", "NA"))
+                            output_row.extend(("NA", "NA", "NA", "NA"))
                         if key_master in master_dict.keys():
                             output_row.append(master_dict[key_master][0])  # zone
                             output_row.append(master_dict[key_master][1])  # city
@@ -190,32 +159,47 @@ def process_file(file_path, question_dict, master_dict, count_list, pwd_list):
                             output_row.append(master_dict[key_master][9])  # module id
                             output_row.append(master_dict[key_master][10])  # module name
                             output_row.append(master_dict[key_master][11])  # exams
+
+                            if index != 0:
+                                key = str(input_csv_data[index - 1][2]) + '_' + str(input_csv_data[index - 1][10])
+                                if item[4] == 1:
+                                    if item[4] == input_csv_data[index-1][4] and output_row[22] == 'Correct' and unique_questions[key][22] == 'Correct':
+                                        option_1_cnt += 1
+                                    else:
+                                        option_1_cnt = 0
+                                    output_row.extend((option_1_cnt, 0, 0, 0))
+                                elif item[4] == 2:
+                                    if item[4] == input_csv_data[index-1][4] and output_row[22] == 'Correct' and unique_questions[key][22] == 'Correct':
+                                        option_2_cnt += 1
+                                    else:
+                                        option_2_cnt = 0
+                                    output_row.extend((0, option_2_cnt, 0, 0))
+                                elif item[4] == 3:
+                                    if item[4] == input_csv_data[index-1][4] and output_row[22] == 'Correct' and unique_questions[key][22] == 'Correct':
+                                        option_3_cnt += 1
+                                    else:
+                                        option_3_cnt = 0
+                                    output_row.extend((0, 0, option_3_cnt, 0))
+                                elif item[4] == 4:
+                                    if item[4] == input_csv_data[index-1][4] and output_row[22] == 'Correct' and unique_questions[key][22] == 'Correct':
+                                        option_4_cnt += 1
+                                    else:
+                                        option_4_cnt = 0
+                                    output_row.extend((0, 0, 0, option_4_cnt))
+                            else:
+                                output_row.extend((0, 0, 0, 0))
                         else:
-                            output_row.extend(("NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA"))
+                            output_row.extend(("NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA", 0, 0, 0 ,0))
+
                     item.clear()
-                    for k, v in unique_questions.items():
-                        if k in timer_dict.keys():
-                            unique_questions[k].extend((timer_dict[k][0], timer_dict[k][1], timer_dict[k][2]))
                     sub_file_output_rows = [value for item, value in unique_questions.items()]
-                    for val in sub_file_output_rows:
-                        response_min_list.append(val[-2])
-                        response_sec_list.append(val[-1])
-
-                    response_avg_min = round(mean(response_min_list), 2) if response_min_list else 0.0
-                    response_avg_sec = round(mean(response_sec_list), 2) if response_sec_list else 0.0
-                    for line in sub_file_output_rows:
-                        line.append(response_avg_min)
-                        line.append(response_avg_sec)
                     output_rows.extend(sub_file_output_rows)
-
                     if sub_file_output_rows:
                         count_list.append(1)
 
                 except Exception as ex:
                     traceback.print_exc()
                     print(sub_file)
-                    with open(output_dir + client_id + '\\' + "Exception.csv", "a", newline="") as f:
-                        f.write(str(ex))
                     continue
             output_rows.insert(
                 0,
@@ -243,6 +227,7 @@ def process_file(file_path, question_dict, master_dict, count_list, pwd_list):
                     "crr_exam_batch",
                     "crr_crct_key",
                     # "Candidate Identification",
+                    "question_stat",
                     "Zone",
                     "City",
                     "Test Center ID",
@@ -253,14 +238,12 @@ def process_file(file_path, question_dict, master_dict, count_list, pwd_list):
                     "Module ID",
                     "Module name",
                     "Exams",
-                    "response_time",
-                    "response_time_mins",
-                    "response_time_secs",
-                    "avg_response_time_mins",
-                    "avg_response_time_secs",
+                    "option1_cnt",
+                    "option2_cnt",
+                    "option3_cnt",
+                    "option4_cnt",
                 ],
             )
-
 
             read_files.append([file])
             with open(
@@ -270,10 +253,6 @@ def process_file(file_path, question_dict, master_dict, count_list, pwd_list):
             ) as f:
                 writer = csv.writer(f)
                 writer.writerows(output_rows)
-
-            with open(output_dir + client_id + '\\' + "discrepancies.csv", "a", newline="") as f:
-                writer = csv.writer(f)
-                writer.writerows([error_files])
 
             with open(output_dir + client_id + '\\' + "Master.csv", "a", newline="") as f:
                 writer = csv.writer(f)
@@ -344,8 +323,6 @@ def main(list_of_folders):
             ).reset_index(drop=True)
             master_dataframe = master_dataframe.append(master_partial)
             master_dataframe = master_dataframe.fillna('NA')
-            master_pwd_dataframe = master_dataframe.loc[master_dataframe['PWD'] == 'Yes']
-            master_pwd_list = master_pwd_dataframe['Enroll. No.'].values.tolist()
             master_csv_data = master_dataframe.values.tolist()
             final_master_dict = {}
             master_temp = [final_master_dict.update({client_name + "_" + str(item[4]) + "_" + str(item[5]): item}) for item in
@@ -354,7 +331,7 @@ def main(list_of_folders):
         del question_dataframe, master_dataframe, question_partial, question_csv_data, master_csv_data, question_temp, master_temp
         count_list = []
         final_count_list = []
-        # with Pool(3) as pool:
+        # with Pool(2) as pool:
         #     p = pool.starmap(process_file, zip(files, repeat(final_question_dict), repeat(final_master_dict), repeat(count_list)))
         #     final_count_list.extend(p)
         #     pool.close()
@@ -363,7 +340,7 @@ def main(list_of_folders):
         # flat_list = [item for sublist in final_count_list for item in sublist]
         # print(flat_list.count(1))
         for x in files:
-            p = process_file(x, final_question_dict, final_master_dict, count_list, master_pwd_list)
+            p = process_file(x, final_question_dict, final_master_dict, count_list)
             # print(p)
     log_message(
         "Fastest Finger processing. Time taken: " + str(datetime.datetime.now() - start_time),

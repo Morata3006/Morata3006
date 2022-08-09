@@ -19,7 +19,7 @@ output_dir = "C:\\Users\\ashetty\\Desktop\\FastestFinger\\"
 
 exception_column_list = ["error"]
 master_column_list = ["filename"]
-log_path = "./logs/"
+log_path = "C:/Users/ashetty/Desktop/DeX/logs/"
 
 
 def log_setup(name, filename, level):
@@ -75,14 +75,11 @@ def process_file(file_path, question_dict, master_dict, count_list):
         Value = 1
 
         for file in glob.glob(file_path + "\\*"):  # batch wise logs folder
-            file_name = file.split("\\")[-1]
+            file_name = file.split("\\")[-1]  # 830-1030-11062022
             read_files = []
-            exception_rows = []
-            low_output_row = []
-            low_sub_file_output_rows = []
             output_rows = []
 
-            for sub_file in glob.glob(file + "\\*"):  # individual candidate log file
+            for sub_file in glob.glob(file + "\\5208693-5192-N.log"):  # individual candidate log file
 
                 try:
                     unique_questions = {}
@@ -113,15 +110,6 @@ def process_file(file_path, question_dict, master_dict, count_list):
                     )
                     dataframe[['IPAddress']] = dataframe[['IPAddress']].fillna('0')
                     res = [i for i in list(dataframe['IPAddress']) if 'PC change' in i]
-                    dataframe_info = dataframe[dataframe['Section Name'].isnull()]  # non attempted questions rows
-                    df_to_list = dataframe_info.values.tolist()
-                    for index, line in enumerate(df_to_list):
-                        line[0] = line[0].replace('INFO - "', "")
-                        line[12] = str(line[12]).replace('"', 'nan')
-                        low_output_row = [client_id, enrollment_id, membership_no, len(res)]
-                        low_output_row.extend(line)
-                        low_sub_file_output_rows.append(low_output_row)
-
 
                     # dataframe = dataframe.dropna()
                     dataframe = dataframe.dropna(subset=['Section Name'])
@@ -139,7 +127,7 @@ def process_file(file_path, question_dict, master_dict, count_list):
                             output_row.extend(item)
                             output_row.append(Value)
                             output_row.append('Appeared-Attempted')
-                            unique_questions[unique_key] = output_row
+                            unique_questions[unique_key] = output_row  # key:questionID, value:
                             key_ques = str(output_row[0]) + "_" + str(output_row[1]) + "_" + str(
                                 int(output_row[6]))  # diamond_eedid_QuestionID
                             key_master = str(output_row[0]) + "_" + str(output_row[2]) + "_" + str(output_row[1])
@@ -249,13 +237,6 @@ def process_file(file_path, question_dict, master_dict, count_list):
             )
 
             read_files.append([file])
-            with open(
-                    output_dir + client_id + "\\low_transformed\\" + rack_name + "\\" + file_name + ".csv",
-                    "w",
-                    newline="",
-            ) as f:
-                writer = csv.writer(f)
-                writer.writerows(low_sub_file_output_rows)
 
             with open(
                     output_dir + client_id + "\\transformed\\" + rack_name + "\\" + file_name + ".csv",
@@ -283,8 +264,6 @@ def process_file(file_path, question_dict, master_dict, count_list):
 def create_output_files(client_name_value, rack_name_value):
     if not os.path.exists(output_dir + client_name_value + "\\transformed\\" + rack_name_value):
         os.mkdir(output_dir + client_name_value + "\\transformed\\" + rack_name_value)
-    if not os.path.exists(output_dir + client_name_value + "\\low_transformed\\" + rack_name_value):
-        os.mkdir(output_dir + client_name_value + "\\low_transformed\\" + rack_name_value)
     if not os.path.exists(base_dir + client_name_value + "\\Master.csv"):
         with open(base_dir + client_name_value + "\\Master.csv", "w", newline="") as f:
             writer = csv.writer(f)
@@ -322,11 +301,11 @@ def main(list_of_folders):
                 low_memory=False,
             ).reset_index(drop=True)
             question_dataframe = question_dataframe.append(question_partial)
-            question_dataframe = question_dataframe.fillna('NA')
+        question_dataframe = question_dataframe.fillna('NA')
         question_csv_data = question_dataframe.values.tolist()
         final_question_dict = {}
         question_temp = [final_question_dict.update({client_name + "_" + str(item[2]) + "_" + str(item[-3]): item}) for
-                         item in question_csv_data]  # diamond_eedid_qstno
+                         item in question_csv_data]  # key:diamond_eedid_qstno, value:complete line
 
         #  master data lookup
         for master_template in master_set:
@@ -335,11 +314,11 @@ def main(list_of_folders):
                 usecols=["Region/ Zone", "City", "Venue ID", "Venue Name", "Candidate Id", "Enroll. No.", "Exam Date", "Exam Time", "PWD", "Module ID", "Module Name", "EXAMS" ]
             ).reset_index(drop=True)
             master_dataframe = master_dataframe.append(master_partial)
-            master_dataframe = master_dataframe.fillna('NA')
-            master_csv_data = master_dataframe.values.tolist()
-            final_master_dict = {}
-            master_temp = [final_master_dict.update({client_name + "_" + str(item[4]) + "_" + str(item[5]): item}) for item in
-                           master_csv_data]
+        master_dataframe = master_dataframe.fillna('NA')
+        master_csv_data = master_dataframe.values.tolist()
+        final_master_dict = {}
+        master_temp = [final_master_dict.update({client_name + "_" + str(item[4]) + "_" + str(item[5]): item}) for item in
+                           master_csv_data]  # key:diamond_examid_eedid, value:complete line
 
         del question_dataframe, master_dataframe, question_partial, question_csv_data, master_csv_data, question_temp, master_temp
         count_list = []

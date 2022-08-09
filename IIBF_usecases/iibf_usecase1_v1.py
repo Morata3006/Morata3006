@@ -6,14 +6,9 @@ import shutil
 import traceback
 from itertools import repeat
 from multiprocessing import Pool
-from statistics import mean
 import pandas as pd
 # from memory_profiler import profile
 import logging
-
-# base_dir = "/data/ff/"
-# input_dir = "raw/"
-# output_dir = "/data/ff/"
 
 base_dir = "C:\\Users\\ashetty\\Desktop\\FastestFinger\\"
 input_dir = "raw\\"
@@ -64,9 +59,10 @@ log_setup(
 )
 
 
-def process_file(file_path, question_dict, master_dict, count_list, pwd_list):
+def process_file(file_path, question_dict, master_dict, count_list):
     try:
 
+        exam_start_str = "Clicked on 'OK' of Start Exam Dialog Box|Clicked on 'Start Exam' button"
         client_id = file_path.split("\\")[-3]
         log_message(
             "Current working directory: " + file_path,
@@ -80,16 +76,11 @@ def process_file(file_path, question_dict, master_dict, count_list, pwd_list):
             file_name = file.split("\\")[-1]
             read_files = []
             output_rows = []
-            error_files = []
 
-            for sub_file in glob.glob(file + "\\5208693-5192-N.log"):  # individual candidate log file
+            for sub_file in glob.glob(file + "\\510452064-28407-N.txt"):  # individual candidate log file
 
                 try:
                     unique_questions = {}
-                    timer_dict ={}
-                    response_min_list = []
-                    response_sec_list = []
-                    # sub_file_output_rows_final = []
                     membership_no = sub_file.split("\\")[-1].split("-")[0]  # SO711311*** (11 alphanumeric)
                     enrollment_id = sub_file.split("\\")[-1].split("-")[1]  # 218132 (6 digit)
                     dataframe = (
@@ -116,69 +107,121 @@ def process_file(file_path, question_dict, master_dict, count_list, pwd_list):
                             .reset_index(drop=True)
                     )
                     dataframe[['IPAddress']] = dataframe[['IPAddress']].fillna('0')
+                    dataframe[['Action']] = dataframe[['Action']].fillna('NA')
+                    # ind = dataframe.index[dataframe['Action'].str.contains("Start Exam", case=False)]  # indentifying index for Ok button
+                    ind = dataframe.index[dataframe['Action'].str.contains(exam_start_str)]
+                    if list(ind):
+                        dataframe = dataframe.iloc[ind[0]+1:]  # taking only rows below the OK button row
                     res = [i for i in list(dataframe['IPAddress']) if 'PC change' in i]
-                    # pwd_list = ['244492']
-                    dataframe = dataframe.dropna(subset=['Section Name'])
+                    dataframe.loc[dataframe['IPAddress'].str.contains('PC Change', case=False), 'IPAddress'] = 'PC Change Point'
+                    dataframe['Section Name'] = dataframe['Section Name'].fillna('nan')
+
+                    dataframe = dataframe[(dataframe.Action == 'RS') | (dataframe.IPAddress == 'PC Change Point')]
+                    dataframe = dataframe.drop_duplicates(subset=['QuestionID', 'Action'], keep='last').reset_index(drop=True)
                     input_csv_data = dataframe.values.tolist()
                     item = []
+                    output_row = []
+                    x = 1
+                    pc_counter = 0
+                    flag = 0
+                    pc_counter_list = []
+                    correct_cnt = 0
+                    incorrect_cnt = 0
+                    attempt_cnt = 0
+                    correct_store = ''
+                    attempt_store = ''
+                    incorrect_store = ''
                     for index, item in enumerate(input_csv_data):
-                        if item[4] != -1:
+                        if item[4] != -1 and (item[9] == 'RS' or item[8] == 'PC Change Point'):
                             item[0] = item[0].replace('INFO - "', "")
-                            item[12] = item[12].replace('"', '')
-                            if item[12] == '00:00' and int(enrollment_id) in pwd_list:
-                                item[12] = '02:40:00'
-                            elif item[12] == '00:00':
-                                item[12] = '02:00:00'
+                            item[12] = str(item[12]).replace('"', '')
+                            if item[12] == '00:00':
+                                item[12] = '00:00:00'
                             unique_key = str(item[2])
                             output_row = [client_id, enrollment_id, membership_no, len(res)]
                             output_row.extend(item)
-                            if index != 0:
-                                input_csv_data[index - 1][-1] = input_csv_data[index-1][-1].replace('"', '')
-                                if input_csv_data[index-1][-1] == '00:00' and int(enrollment_id) in pwd_list:
-                                    input_csv_data[index-1][-1] = '02:40:00'
-                                elif input_csv_data[index-1][-1] == '00:00':
-                                    input_csv_data[index - 1][-1] = '02:00:00'
-                                if datetime.datetime.strptime(item[12], '%H:%M:%S') > datetime.datetime.strptime(input_csv_data[index-1][-1], '%H:%M:%S'):
-                                    error_files.append(sub_file)
-                                    mod_timer = datetime.datetime.strptime(item[12], '%H:%M:%S')
-                                    # output_row.append(item[12])  # Previous Timer
-                                else:
-                                    mod_timer = datetime.datetime.strptime(input_csv_data[index-1][-1], '%H:%M:%S')
-                                    # output_row.append(input_csv_data[index - 1][-1])
-                                response_time = mod_timer - datetime.datetime.strptime(item[12], '%H:%M:%S')
-                                response_time_mins = round(response_time.total_seconds() / 60, 2)
-                                response_time_secs = response_time.total_seconds()
-                            else:
-                                if int(enrollment_id) in pwd_list:
-                                    timer = '02:40:00'
-                                else:
-                                    timer = '02:00:00'
-                                if datetime.datetime.strptime(item[12], '%H:%M:%S') > datetime.datetime.strptime(timer, '%H:%M:%S'):
-                                    error_files.append(sub_file)
-                                response_time = datetime.datetime.strptime(timer, '%H:%M:%S') - datetime.datetime.strptime(item[12], '%H:%M:%S')
-                                response_time_mins = round(response_time.total_seconds() / 60, 2)
-                                response_time_secs = response_time.total_seconds()
-                                # output_row.append(timer)
                             output_row.append(Value)
                             output_row.append('Appeared-Attempted')
-                            unique_questions[unique_key] = output_row
-                            if str(item[2]) not in timer_dict.keys():  # timer dictionary with question and response time
-                                timer_dict[unique_key] = [response_time, response_time_mins, response_time_secs]
+                            if 'PC Change' in input_csv_data[index - 1][8] and index != 0:
+                                pc_counter += 1
+                                output_row.append(pc_counter)
                             else:
-                                timer_dict[unique_key][0] = timer_dict[unique_key][0] + response_time
-                                timer_dict[unique_key][1] = timer_dict[unique_key][1] + response_time_mins
-                                timer_dict[unique_key][2] = timer_dict[unique_key][2] + response_time_secs
-                            key_ques = str(output_row[0]) + "_" + str(output_row[1]) + "_" + str(
+                                output_row.append(pc_counter)
+                            if unique_questions:
+                                prev_pc_counter = list(unique_questions.items())[-1][1][19]
+                            else:
+                                prev_pc_counter = 0
+                            if str(output_row[6]) != 'nan':
+                                unique_questions[unique_key] = output_row
+                                key_ques = str(output_row[0]) + "_" + str(output_row[1]) + "_" + str(
                                 int(output_row[6]))  # diamond_eedid_QuestionID
-                            key_master = str(output_row[0]) + "_" + str(output_row[2]) + "_" + str(output_row[1])
+                                key_master = str(output_row[0]) + "_" + str(output_row[2]) + "_" + str(output_row[1])
+                            else:
+                                if str(input_csv_data[index][2]) == 'nan' and str(
+                                        input_csv_data[index - 1][2]) == 'nan':
+                                    if index == 0 or index - 1 == 0:
+                                        correct_store = '0|'
+                                        incorrect_store = '0|'
+                                        attempt_store = '0|'
+                                    else:
+                                        if flag == 0:
+                                            correct_store = str(correct_cnt) + '|0|'
+                                            incorrect_store = str(incorrect_cnt) + '|0|'
+                                            attempt_store = str(attempt_cnt) + '|0|'
+                                            correct_cnt = 0
+                                            incorrect_cnt = 0
+                                            attempt_cnt = 0
+                                            flag = 1
+                                        elif flag == 1:
+                                            correct_store = correct_store + '0|'
+                                            incorrect_store = incorrect_store + '0|'
+                                            attempt_store = attempt_store + '0|'
+                                if input_csv_data[index] == input_csv_data[-1]:
+                                    correct_store = correct_store + str(correct_cnt)
+                                    incorrect_store = incorrect_store + str(incorrect_cnt)
+                                    attempt_store = attempt_store + str(attempt_cnt)
+                                key_ques = ''
+                                key_master = ''
+                                unique_questions['PC_change_'+str(x)] = output_row
+                                x += 1
                         else:
                             continue
                         if key_ques in question_dict.keys():
                             output_row.append(question_dict[key_ques][3])  # Medium Code
                             output_row.append("08:30-10:30")  # batch time
                             output_row.append(question_dict[key_ques][-1])  # Correct Answer
+                            if item[4] == output_row[22]:
+                                output_row.append('Correct')
+                            else:
+                                output_row.append('Incorrect')
+                            # store logic snippet start
+                            if pc_counter == prev_pc_counter+1 and flag != 1:
+                                correct_store = correct_store + str(correct_cnt)+'|'
+                                incorrect_store = incorrect_store + str(incorrect_cnt) + '|'
+                                attempt_store = attempt_store + str(attempt_cnt) + '|'
+                                correct_cnt = 0
+                                incorrect_cnt = 0
+                                attempt_cnt = 0
+                                if output_row[23] == 'Correct':
+                                    attempt_cnt += 1
+                                    correct_cnt += 1
+                                elif output_row[23] == 'Incorrect':
+                                    attempt_cnt += 1
+                                    incorrect_cnt += 1
+                            elif pc_counter == prev_pc_counter:
+                                if output_row[23] == 'Correct':
+                                    attempt_cnt += 1
+                                    correct_cnt += 1
+                                elif output_row[23] == 'Incorrect':
+                                    attempt_cnt += 1
+                                    incorrect_cnt += 1
+                                if input_csv_data[index] == input_csv_data[-1]:
+                                    correct_store = correct_store + str(correct_cnt)
+                                    incorrect_store = incorrect_store + str(incorrect_cnt)
+                                    attempt_store = attempt_store + str(attempt_cnt)
+
                         else:
-                            output_row.extend(("NA", "NA", "NA"))
+                            output_row.extend(("NA", "NA", "NA", "NA"))
                         if key_master in master_dict.keys():
                             output_row.append(master_dict[key_master][0])  # zone
                             output_row.append(master_dict[key_master][1])  # city
@@ -192,30 +235,65 @@ def process_file(file_path, question_dict, master_dict, count_list, pwd_list):
                             output_row.append(master_dict[key_master][11])  # exams
                         else:
                             output_row.extend(("NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA"))
+                    if not output_row and item:  # for not attempted single row addition
+                        if item[4] == -1:
+                            item[0] = item[0].replace('INFO - "', "")
+                            item[12] = item[12].replace('"', '')
+                            output_row = [client_id, enrollment_id, membership_no, len(res)]
+                            item[12] = '23:00:00'
+                            output_row.extend(item)
+                            output_row.append(Value)
+                            output_row.append('Appeared-Not-Attempted')
+                            output_row.append(0)
+                            unique_key = str(item[2])
+                            unique_questions[unique_key] = output_row
+                            key_ques = str(output_row[0]) + "_" + str(output_row[1]) + "_" + str(
+                                int(output_row[6]))  # diamond_examid_QuestionID
+                            key_master = str(output_row[0]) + "_" + str(output_row[2]) + "_" + str(output_row[1])
+                            if key_ques in question_dict.keys():
+                                output_row.append(question_dict[key_ques][3])
+                                output_row.append("08:30-10:30")
+                                output_row.append(question_dict[key_ques][-1])
+                            else:
+                                output_row.extend(("NA", "NA", "NA"))
+                            if key_master in master_dict.keys():
+                                output_row.append(master_dict[key_master][0])  # zone
+                                output_row.append(master_dict[key_master][1])  # city
+                                output_row.append(master_dict[key_master][2])  # test center id/ venue id
+                                output_row.append(master_dict[key_master][3])  # venue name
+                                output_row.append(master_dict[key_master][6])  # exam date
+                                output_row.append(master_dict[key_master][7])  # exam time
+                                output_row.append(master_dict[key_master][8])  # pwd
+                                output_row.append(master_dict[key_master][9])  # module id
+                                output_row.append(master_dict[key_master][10])  # module name
+                                output_row.append(master_dict[key_master][11])  # exams
+                            else:
+                                output_row.extend(("NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA"))
                     item.clear()
-                    for k, v in unique_questions.items():
-                        if k in timer_dict.keys():
-                            unique_questions[k].extend((timer_dict[k][0], timer_dict[k][1], timer_dict[k][2]))
+                    # unique_questions = {
+                    #     k: v
+                    #     for k, v in sorted(unique_questions.items(), key=lambda item: item[1])
+                    # }
                     sub_file_output_rows = [value for item, value in unique_questions.items()]
-                    for val in sub_file_output_rows:
-                        response_min_list.append(val[-2])
-                        response_sec_list.append(val[-1])
-
-                    response_avg_min = round(mean(response_min_list), 2) if response_min_list else 0.0
-                    response_avg_sec = round(mean(response_sec_list), 2) if response_sec_list else 0.0
-                    for line in sub_file_output_rows:
-                        line.append(response_avg_min)
-                        line.append(response_avg_sec)
+                    if sub_file_output_rows:
+                        for ele in sub_file_output_rows:
+                            pc_counter_list.append(ele[19])
+                        max_cnt = sorted(pc_counter_list)[-1]
+                    for element in sub_file_output_rows:
+                        element.extend((correct_store, incorrect_store, attempt_store))
+                        if element[19] == 0:
+                            element.append('No PC change')
+                        elif element[19] == 1:
+                            element.append('First PC change')
+                        elif element[19] == max_cnt:
+                            element.append('Last PC change')
                     output_rows.extend(sub_file_output_rows)
-
                     if sub_file_output_rows:
                         count_list.append(1)
 
                 except Exception as ex:
                     traceback.print_exc()
                     print(sub_file)
-                    with open(output_dir + client_id + '\\' + "Exception.csv", "a", newline="") as f:
-                        f.write(str(ex))
                     continue
             output_rows.insert(
                 0,
@@ -239,10 +317,12 @@ def process_file(file_path, question_dict, master_dict, count_list, pwd_list):
                     "Timer",
                     "Value",
                     "appearance status",
+                    "pc_counter",
                     "medium code",
                     "crr_exam_batch",
                     "crr_crct_key",
                     # "Candidate Identification",
+                    "Status",
                     "Zone",
                     "City",
                     "Test Center ID",
@@ -253,16 +333,15 @@ def process_file(file_path, question_dict, master_dict, count_list, pwd_list):
                     "Module ID",
                     "Module name",
                     "Exams",
-                    "response_time",
-                    "response_time_mins",
-                    "response_time_secs",
-                    "avg_response_time_mins",
-                    "avg_response_time_secs",
+                    "correct_store",
+                    "incorrect_store",
+                    "attempted_store",
+                    "pc_change_status",
                 ],
             )
 
-
             read_files.append([file])
+
             with open(
                     output_dir + client_id + "\\transformed\\" + rack_name + "\\" + file_name + ".csv",
                     "w",
@@ -270,10 +349,6 @@ def process_file(file_path, question_dict, master_dict, count_list, pwd_list):
             ) as f:
                 writer = csv.writer(f)
                 writer.writerows(output_rows)
-
-            with open(output_dir + client_id + '\\' + "discrepancies.csv", "a", newline="") as f:
-                writer = csv.writer(f)
-                writer.writerows([error_files])
 
             with open(output_dir + client_id + '\\' + "Master.csv", "a", newline="") as f:
                 writer = csv.writer(f)
@@ -344,8 +419,6 @@ def main(list_of_folders):
             ).reset_index(drop=True)
             master_dataframe = master_dataframe.append(master_partial)
             master_dataframe = master_dataframe.fillna('NA')
-            master_pwd_dataframe = master_dataframe.loc[master_dataframe['PWD'] == 'Yes']
-            master_pwd_list = master_pwd_dataframe['Enroll. No.'].values.tolist()
             master_csv_data = master_dataframe.values.tolist()
             final_master_dict = {}
             master_temp = [final_master_dict.update({client_name + "_" + str(item[4]) + "_" + str(item[5]): item}) for item in
@@ -354,7 +427,7 @@ def main(list_of_folders):
         del question_dataframe, master_dataframe, question_partial, question_csv_data, master_csv_data, question_temp, master_temp
         count_list = []
         final_count_list = []
-        # with Pool(3) as pool:
+        # with Pool(2) as pool:
         #     p = pool.starmap(process_file, zip(files, repeat(final_question_dict), repeat(final_master_dict), repeat(count_list)))
         #     final_count_list.extend(p)
         #     pool.close()
@@ -363,7 +436,7 @@ def main(list_of_folders):
         # flat_list = [item for sublist in final_count_list for item in sublist]
         # print(flat_list.count(1))
         for x in files:
-            p = process_file(x, final_question_dict, final_master_dict, count_list, master_pwd_list)
+            p = process_file(x, final_question_dict, final_master_dict, count_list)
             # print(p)
     log_message(
         "Fastest Finger processing. Time taken: " + str(datetime.datetime.now() - start_time),

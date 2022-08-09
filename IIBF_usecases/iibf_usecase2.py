@@ -19,7 +19,7 @@ output_dir = "C:\\Users\\ashetty\\Desktop\\FastestFinger\\"
 
 exception_column_list = ["error"]
 master_column_list = ["filename"]
-log_path = "./logs/"
+log_path = "C:/Users/ashetty/Desktop/DeX/logs/"
 
 
 def log_setup(name, filename, level):
@@ -77,12 +77,9 @@ def process_file(file_path, question_dict, master_dict, count_list):
         for file in glob.glob(file_path + "\\*"):  # batch wise logs folder
             file_name = file.split("\\")[-1]
             read_files = []
-            exception_rows = []
-            low_output_row = []
-            low_sub_file_output_rows = []
             output_rows = []
 
-            for sub_file in glob.glob(file + "\\*"):  # individual candidate log file
+            for sub_file in glob.glob(file + "\\5208693-5192-N.log"):  # individual candidate log file
 
                 try:
                     unique_questions = {}
@@ -162,35 +159,36 @@ def process_file(file_path, question_dict, master_dict, count_list):
                             output_row.append(master_dict[key_master][9])  # module id
                             output_row.append(master_dict[key_master][10])  # module name
                             output_row.append(master_dict[key_master][11])  # exams
+
+                            if index != 0:
+                                if item[4] == 1:
+                                    if item[4] == input_csv_data[index-1][4] and output_row[22] == 'Correct' and unique_questions[str(input_csv_data[index-1][2])][22] == 'Correct':
+                                        option_1_cnt += 1
+                                    else:
+                                        option_1_cnt = 0
+                                    output_row.extend((option_1_cnt, 0, 0, 0))
+                                elif item[4] == 2:
+                                    if item[4] == input_csv_data[index-1][4] and output_row[22] == 'Correct' and unique_questions[str(input_csv_data[index-1][2])][22] == 'Correct':
+                                        option_2_cnt += 1
+                                    else:
+                                        option_2_cnt = 0
+                                    output_row.extend((0, option_2_cnt, 0, 0))
+                                elif item[4] == 3:
+                                    if item[4] == input_csv_data[index-1][4] and output_row[22] == 'Correct' and unique_questions[str(input_csv_data[index-1][2])][22] == 'Correct':
+                                        option_3_cnt += 1
+                                    else:
+                                        option_3_cnt = 0
+                                    output_row.extend((0, 0, option_3_cnt, 0))
+                                elif item[4] == 4:
+                                    if item[4] == input_csv_data[index-1][4] and output_row[22] == 'Correct' and unique_questions[str(input_csv_data[index-1][2])][22] == 'Correct':
+                                        option_4_cnt += 1
+                                    else:
+                                        option_4_cnt = 0
+                                    output_row.extend((0, 0, 0, option_4_cnt))
+                            else:
+                                output_row.extend((0, 0, 0, 0))
                         else:
-                            output_row.extend(("NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA"))
-                        if index != 0:
-                            if item[4] == 1:
-                                if item[4] == input_csv_data[index-1][4] and output_row[22] == 'Correct' and unique_questions[str(input_csv_data[index-1][2])][22] == 'Correct':
-                                    option_1_cnt += 1
-                                else:
-                                    option_1_cnt = 0
-                                output_row.extend((option_1_cnt, 0, 0, 0))
-                            elif item[4] == 2:
-                                if item[4] == input_csv_data[index-1][4] and output_row[22] == 'Correct' and unique_questions[str(input_csv_data[index-1][2])][22] == 'Correct':
-                                    option_2_cnt += 1
-                                else:
-                                    option_2_cnt = 0
-                                output_row.extend((0, option_2_cnt, 0, 0))
-                            elif item[4] == 3:
-                                if item[4] == input_csv_data[index-1][4] and output_row[22] == 'Correct' and unique_questions[str(input_csv_data[index-1][2])][22] == 'Correct':
-                                    option_3_cnt += 1
-                                else:
-                                    option_3_cnt = 0
-                                output_row.extend((0, 0, option_3_cnt, 0))
-                            elif item[4] == 4:
-                                if item[4] == input_csv_data[index-1][4] and output_row[22] == 'Correct' and unique_questions[str(input_csv_data[index-1][2])][22] == 'Correct':
-                                    option_4_cnt += 1
-                                else:
-                                    option_4_cnt = 0
-                                output_row.extend((0, 0, 0, option_4_cnt))
-                        else:
-                            output_row.extend((0, 0, 0, 0))
+                            output_row.extend(("NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA", 0, 0, 0 ,0))
 
                     item.clear()
                     sub_file_output_rows = [value for item, value in unique_questions.items()]
@@ -247,8 +245,6 @@ def process_file(file_path, question_dict, master_dict, count_list):
             )
 
             read_files.append([file])
-
-
             with open(
                     output_dir + client_id + "\\transformed\\" + rack_name + "\\" + file_name + ".csv",
                     "w",

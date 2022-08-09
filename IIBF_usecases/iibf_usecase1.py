@@ -19,7 +19,7 @@ output_dir = "C:\\Users\\ashetty\\Desktop\\FastestFinger\\"
 
 exception_column_list = ["error"]
 master_column_list = ["filename"]
-log_path = "./logs/"
+log_path = "C:/Users/ashetty/Desktop/DeX/logs/"
 
 
 def log_setup(name, filename, level):
@@ -77,9 +77,6 @@ def process_file(file_path, question_dict, master_dict, count_list):
         for file in glob.glob(file_path + "\\*"):  # batch wise logs folder
             file_name = file.split("\\")[-1]
             read_files = []
-            exception_rows = []
-            low_output_row = []
-            low_sub_file_output_rows = []
             output_rows = []
 
             for sub_file in glob.glob(file + "\\510229861-17612-N.log"):  # individual candidate log file
@@ -112,11 +109,13 @@ def process_file(file_path, question_dict, master_dict, count_list):
                             .reset_index(drop=True)
                     )
                     dataframe[['IPAddress']] = dataframe[['IPAddress']].fillna('0')
+                    ind = dataframe.index[dataframe['Action'].str.contains("Clicked on 'OK' of Start Exam Dialog Box.")].astype(int)  # indentifying index for Ok button
+                    dataframe = dataframe.iloc[ind[0]+1:]  # taking only rows below the OK button row
                     res = [i for i in list(dataframe['IPAddress']) if 'PC change' in i]
                     dataframe.loc[dataframe['IPAddress'].str.contains('PC Change', case=False), 'IPAddress'] = 'PC Change Point'
-
                     dataframe['Section Name'] = dataframe['Section Name'].fillna('nan')
-                    dataframe = dataframe[(dataframe.Action == 'RS') | (dataframe.IPAddress == 'PC Change Point')]
+
+                    dataframe = dataframe[(dataframe.Action == 'RS') | (dataframe.IPAddress == 'PC Change Point')].reset_index(drop=True)
                     input_csv_data = dataframe.values.tolist()
                     item = []
                     output_row = []
@@ -155,8 +154,12 @@ def process_file(file_path, question_dict, master_dict, count_list):
                             output_row.append(question_dict[key_ques][3])  # Medium Code
                             output_row.append("08:30-10:30")  # batch time
                             output_row.append(question_dict[key_ques][-1])  # Correct Answer
+                            if item[4] == output_row[22]:
+                                output_row.append('Correct')
+                            else:
+                                output_row.append('Incorrect')
                         else:
-                            output_row.extend(("NA", "NA", "NA"))
+                            output_row.extend(("NA", "NA", "NA", "NA"))
                         if key_master in master_dict.keys():
                             output_row.append(master_dict[key_master][0])  # zone
                             output_row.append(master_dict[key_master][1])  # city
@@ -256,6 +259,7 @@ def process_file(file_path, question_dict, master_dict, count_list):
                     "crr_exam_batch",
                     "crr_crct_key",
                     # "Candidate Identification",
+                    "Status",
                     "Zone",
                     "City",
                     "Test Center ID",
