@@ -1,0 +1,70 @@
+input{
+  file{
+    path => ["/data/S3/PCGT_Tango/registration/transformed_json/13_20Feb/*.json"]
+    start_position => "beginning"
+    sincedb_path => "/dev/null"
+    mode => "read"
+    add_field => { "path_name" => "%{path}" }
+    file_completed_action => "log"
+    file_completed_log_path => "/etc/logstash/conf.d/files_completed/registration_analysis.txt"
+  }
+}
+filter{
+
+json {
+        source => "message"
+      }
+
+mutate {
+   convert => {"Age" => "integer"}
+}
+
+fingerprint {
+   source => ["Client_name", "Registration Number"]
+   concatenate_sources => true
+   target => "[@metadata][fingerprint]"
+   #method => "MURMUR3"
+}
+
+mutate {
+        remove_field => [ "message","@version"]
+        lowercase => ["Client_name","exam_name"]
+     }
+if [Application Submitted Date] == ""  {
+
+   drop { }
+}
+else  {
+date{
+ match => [ "Application Submitted Date" , "YYYY-MM-dd HH:mm:ss.SSSSSS", "YYYY-MM-dd HH:mm:ss", "YYYY-MM-dd HH:mm:ss.SSS" ]
+ target => "Application Submitted Date"
+}
+}
+
+if [Graduation Month & Year of Passing] == ""  {
+
+   drop { }
+}
+else  {
+date{
+ match => [ "Graduation Month & Year of Passing" ,  "MMMM yyyy" ]
+ target => "Graduation Month & Year of Passing"
+}
+}
+
+}
+
+output
+{
+stdout { codec => rubydebug }
+elasticsearch {
+      hosts => [ "https://172.31.23.212:9200","https://172.31.28.219:9200", "https://172.31.19.140:9200" ]
+      document_id => "%{[@metadata][fingerprint]}"
+      index => "dex_registration_%{Client_name}_%{exam_name}"
+      user => "elastic"
+      password => "Dexanalytics@2022#"
+      ssl => true
+      ssl_certificate_verification => true
+      cacert => "/etc/logstash/elkcerts/ca.crt"
+}
+}

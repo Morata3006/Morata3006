@@ -1,0 +1,57 @@
+input{
+  file{
+    path => ["/data/S3/PCGT_Tango/scorereport/transformed_json/*.json"]
+    start_position => "beginning"
+    sincedb_path => "/dev/null"
+    mode => "read"
+    add_field => { "path_name" => "%{path}" }
+    file_completed_action => "log"
+    file_completed_log_path => "/etc/logstash/conf.d/files_completed/result_analysis.txt"
+  }
+}
+filter{
+
+json {
+        source => "message"
+      }
+	  
+if [message] =~ "^clientid" { drop {} }
+
+mutate {     #renaming filed beacuse it was taking other filed name i renamed it by data filed name.
+                rename => { "registrationnumber" => "RegistrationNumber" }
+                rename => { "examid" => "ExamId" }
+        }
+#mutate{  convert => ["qtp_eed_id", "integer"]}
+mutate{  convert => ["totalquestion", "integer"]}
+mutate{  convert => ["attemptedquestions", "integer"]}
+mutate{  convert => ["deletedquestions", "integer"]}
+mutate{  convert => ["correctanswers", "integer"]}
+mutate{  convert => ["wronganswers", "integer"]}
+mutate{  convert => ["totalnewscore", "float"]}
+mutate{ lowercase => ["clientid", "exam_name"]}
+
+date{
+ match => [ "Test Date" ,  "yyyy-MM-dd" ]
+ target => "testdate"
+}
+
+fingerprint {
+    source => "message"
+    target => "[@metadata][fingerprint]"
+    method => "MURMUR3"
+  }
+}
+output
+{
+stdout { codec => rubydebug }
+elasticsearch {
+      hosts => [ "https://172.31.23.212:9200","https://172.31.28.219:9200" ,"https://172.31.19.140:9200"  ]
+      document_id => "%{[@metadata][fingerprint]}"
+      index => "dex_candidate_result_analysis_%{clientid}_%{exam_name}"
+      user => "elastic"
+      password => "Dexanalytics@2022#"
+      ssl => true
+	  ssl_certificate_verification => true
+      cacert => "/etc/logstash/elkcerts/ca.crt"
+}
+}

@@ -1,0 +1,64 @@
+input{
+  file{
+    path => "/data/S3/PCGT_Tango/registration/transformed/*/*.csv"
+    #path => "/home/nsedex/Registration/temp/dex/full_data/Diamond_reg.csv"
+
+    start_position => "beginning"
+    sincedb_path => "/home/nsedex/Registration/since_db.txt"
+    sincedb_write_interval=> 15
+  }
+}
+filter{
+   csv{
+    separator => ","     
+       columns => ["Client_name","exam_name","oum_user_pk","Registration Number","Name as per SSLC Mark sheet(Name with suffix as Initials)","Post Applying For:","Subject applied for","Date of Birth (as per SSLC mark Sheet)","Age","Nationality","email id","phone number","Father Name","Mother Name","Native District","Are you differently Abled?","Identity card number","Percentage of Disability (%)","Select PWD Category","Differently abled sub category","Whether Scribe Required","Gender","Marital Status","Destitute Widow","Do you have any medical issues?","Mention your medical issue","Are you pregnant?","Category(Caste)","Do you have community certificate issued by Tamil Nadu Govt.?","Name of the SubCaste","Is the Community Certificate issued in Father's name","Community certificate number","Are You a Ex-Serviceman?","Religion","Other Religion","Photo ID Proof","Photo ID Proof No.","Do you claim reservation under Secondary Grade Teachers","Name of school where you were working in Secondary Grade - Te","School Dise code","Do you want to claim reservation under meritorious sports","Medal Winner of Olympic, Paralympics and World Championships (4","Gold Medalists of Commonwealth/ Asian Games and Asian Para Game","Silver / Bronze in Commonwealth / Asian Games and Asian Para Ga","Medalists in World Championships (2 Years / Annual), IBSA World","Participation in Olympics / Commonwealth / Asian Games and Worl","Are you resident of Tamil Nadu for the last 5 years","Have you represented the State of Tamil Nadu in the National le","Is your sport a Team Sport?","Have you played in 50% or more games played by the team in that","All the sports achievement made are on or after 01.01.2018","Is your age less than or equal to 40 as on 01.07.2021","Permanent Address","Permanent State","Permanent District","Permanent City","Pincode","ocd_comm_same_as_perm","Residential Address","Residential State and Union Territories","Residential District","Residential City / Village","Residential Pincode","Photo","Sign","Application Submitted Date","Application Status","amount","Payment Date and Time","Status","TP Transaction No.","Transaction No.","Name of Board / University - 10th / SSLC ","Month & Year of Passing - 10th / SSLC ","10th/SSC percentage","Medium of Instruction - 10th / SSLC ","Is Tamil studied as one Subject - 10th / SSLC ","Name of Board / University - 12th / HSC ","Month & Year of Passing - 12th / HSC","12th/HSC percentage","Medium of Instruction - 12th / HSC","Is Tamil studied as one Subject - 12th / HSC","Diploma / Degree Name - Under Graduate","Main Subject - Under Graduate","Period of Study - Under Graduate","Duration of Study (No. of Years) - Under Graduate","Name of Board / University - Under Graduate","Month & Year of Passing - Under Graduate","Recognized University - Under Graduate","Regular / Part Time / Distance Education/ Open University - Under Graduate","Percentage of marks obtained (%) - Under Graduate","Medium of Instruction - Under Graduate","Is Tamil studied as one Subject - Under Graduate","Diploma / Degree Name - UG Degree for Physical Director","Main Subject - UG Degree for Physical Director","Period of Study - UG Degree for Physical Director","Duration of Study (No. of Years) - UG Degree for Physical Director","Name of Board / University - UG Degree for Physical Director","Month & Year of Passing - UG Degree for Physical Director","Recognized University - UG Degree for Physical Director","Regular / Part Time / Distance Education/ Open University - UG Degree for Physical Director","Percentage of marks obtained (%) - UG Degree for Physical Director","Medium of Instruction - UG Degree for Physical Director","Is Tamil studied as one Subject - UG Degree for Physical Director","Diploma / Degree Name - Post Graduate","Main Subject - Post Graduate","Period of Study - Post Graduate","Duration of Study (No. of Years) - Post Graduate","Name of Board / University - Post Graduate","Month & Year of Passing - Post Graduate","Recognized University - Post Graduate","Regular / Part Time / Distance Education/ Open University - Post Graduate","Percentage of marks obtained (%) - Post Graduate","Medium of Instruction - Post Graduate","Is Tamil studied as one Subject - Post Graduate","Graduation Diploma/Degree Name","Main Subject - Degree in Education","Period of Study - Degree in Education","Duration of Study (No. of Years) - Degree in Education","Graduation University Name","Graduation Month & Year of Passing","Recognized University - Degree in Education","Regular / Part Time / Distance Education/ Open University - Degree in Education","Graduation Percentage","Medium of Instruction - Degree in Education","Is Tamil studied as one Subject - Degree in Education","Do you want to claim PSTM (Persons Studied in Tamil Medium) reservation?","Is Whether the Subject studied in UG and 'The subject applied for' the post matches?","Is the Equivalence G.O available?","Equivalence G.O number?","Is Whether the Subject studied in PG and 'The subject applied for' the post matches?","Have you qualified in master's degree and bachelor's degree in the same subject or its equivalent?","Language Under Part I in 10th / SSLC","Language Under Part I in 12th / HSC","Language Under Part I in UG","Community certificate","Differently abled certificate","SSLC certificate","PSTM Certificate for SSLC ","HSC certificate","PSTM Certificate for HSC ","UG certificate(If You Posses more than one  UG degree need to add(Merge) all UG certificates in to a single pdf)","UG Consolidated MarkSheet","PSTM Certificate for UG degree","PG Degree Certificate","PSTM Certificate for PG degree","PG Consolidated MarkSheet","B.Ed Certificate","B.Ed Consolidated MarkSheet","PSTM Certificate for B.Ed","Destitute Widow Certificate","Secondary Grade Teacher Service Certificate","Sports Certificate","Ex-Serviceman"] 
+  }
+
+mutate {
+   convert => {"Age" => "integer"}
+}
+
+fingerprint {
+   source => ["Client_name", "Registration Number"]
+   concatenate_sources => true
+   target => "[@metadata][fingerprint]"
+   #method => "MURMUR3"
+}
+
+mutate {
+        remove_field => [ "message","@version"]
+        lowercase => ["Client_name","exam_name"]
+     }
+if [Application Submitted Date] == 'NA'  {
+
+   drop { }
+}
+
+else  {
+date{
+ match => [  "Application Submitted Date" ,  "YYYY-MM-dd HH:mm:ss.SSSSSS", "YYYY-MM-dd HH:mm:ss" ]
+  target => "Application Submitted Date"
+}
+}
+
+date{
+ match => [  "Graduation Month & Year of Passing" ,  "dd-M-YYYY" ]
+  target => "Graduation Month & Year of Passing"
+}
+
+
+}
+
+output
+{
+#stdout { codec => rubydebug }
+elasticsearch {
+      hosts => [ "https://172.31.23.212:9200","https://172.31.28.219:9200", "https://172.31.19.140:9200" ]
+      document_id => "%{[@metadata][fingerprint]}"
+      index => "dex_registration_%{Client_name}_%{exam_name}"
+      user => "elastic"
+      password => "Dexanalytics@2022#"
+      ssl => true
+      cacert => "/etc/logstash/elkcerts/ca.crt"
+}
+}

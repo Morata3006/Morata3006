@@ -1,0 +1,63 @@
+input
+ {
+  file {
+  #mode => read
+  path => "/data/S3/PCGT_Tango/scorereport/transformed/*.csv"
+  start_position => "beginning"
+  sincedb_path => "/dev/null"
+  #sincedb_write_interval => 15
+  #file_completed_action => "delete"
+  #file_completed_log_path => "/etc/logstash/processed.log"
+  }
+}
+filter{
+  
+    if [message] =~ "^clientid" { drop {} }
+
+   csv{
+    separator => ","
+    columns => [ "clientid","exam_name","testdate","testtime","examid","candidatename","registrationnumber","roll_no","eed_id","testcenter","language","old_marks","module","module_id","qtp_eed_id","qtp_sec_seqno","section","totalquestion","attemptedquestions","nonattemptedquestions","deletedquestions","correctanswers","wronganswers","totalnewscore" ]
+    skip_header => true                          
+  }
+  
+ mutate {     #renaming filed beacuse it was taking other filed name i renamed it by data filed name.
+                rename => { "registrationnumber" => "RegistrationNumber" }
+                rename => { "examid" => "ExamId" }
+              
+        }
+#mutate{  convert => ["qtp_eed_id", "integer"]}
+mutate{  convert => ["totalquestion", "integer"]}
+mutate{  convert => ["attemptedquestions", "integer"]}
+mutate{  convert => ["deletedquestions", "integer"]}
+mutate{  convert => ["correctanswers", "integer"]}
+mutate{  convert => ["wronganswers", "integer"]}
+mutate{  convert => ["totalnewscore", "float"]}
+
+#fingerprint {
+#    source => ["path","ExamId"]
+#    target => "[@metadata][fingerprint]"
+#    method => "MURMUR3"
+# }
+
+fingerprint {
+    source => "message"
+    target => "[@metadata][fingerprint]"
+    method => "MURMUR3"
+  }
+
+}
+output
+{
+stdout { codec => rubydebug }
+elasticsearch {
+      hosts => [ "https://172.31.23.212:9200","https://172.31.28.219:9200" ,"https://172.31.19.140:9200"  ]
+      document_id => "%{[@metadata][fingerprint]}"
+      index => "dex_candidate_result_analysis_pcgt_tango"
+      #index => "uat3"
+      #index => "test_result"
+      user => "elastic"
+      password => "Dexanalytics@2022#"
+      ssl => true
+      cacert => "/etc/logstash/elkcerts/ca.crt"
+}
+}
