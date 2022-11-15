@@ -11,19 +11,15 @@ from statistics import mean
 import pandas as pd
 # from memory_profiler import profile
 import logging
-
-# base_dir = "/data/ff/"
-# input_dir = "raw/"
-# output_dir = "/data/ff/"
 import psycopg2
 
-base_dir = "C:\\Users\\ashetty\\Desktop\\FastestFinger\\"
-input_dir = "raw\\"
-output_dir = "C:\\Users\\ashetty\\Desktop\\FastestFinger\\"
+base_dir = "C:/Users/sayle/Downloads/"
+input_dir = "raw/*"
+output_dir = "C:/Users/sayle/Downloads/"
 
 exception_column_list = ["error"]
 master_column_list = ["filename"]
-log_path = "C:/Users/ashetty/Desktop/DeX/logs/"
+log_path = "./logs/"
 
 conn_params_dic = {
     "host": "localhost",
@@ -33,10 +29,10 @@ conn_params_dic = {
 }
 
 
-def connect(conn):
+def connect(conn_params_dic):
     conn = None
     try:
-        conn = psycopg2.connect(**conn)
+        conn = psycopg2.connect(**conn_params_dic)
     except (Exception, psycopg2.OperationalError) as error:
         print("Error: %s" % error)
         conn = None
@@ -86,31 +82,31 @@ log_setup(
 def process_file(file_path, question_dict, master_dict, count_list, pwd_list):
     try:
 
-        client_id = file_path.split("\\")[-3]
+        client_id = file_path.split("/")[-3]
         log_message(
             "Current working directory: " + file_path,
             "info",
             "system_log",
         )
-        rack_name = file_path.split('\\')[-1]
+        rack_name = file_path.split('/')[-1]
         Value = 1
 
-        for file in glob.glob(file_path + "\\*"):  # batch wise logs folder
-            file_name = file.split("\\")[-1]
+        for file in glob.glob(file_path + "/*"):  # batch wise logs folder
+            file_name = file.split("/")[-1]
             read_files = []
             output_rows = []
             error_files = []
 
-            for sub_file in glob.glob(file + "\\*"):  # individual candidate log file
+            for sub_file in glob.glob(file + "/*"):  # individual candidate log file
 
                 try:
                     unique_questions = {}
-                    timer_dict ={}
+                    timer_dict = {}
                     response_min_list = []
                     response_sec_list = []
                     # sub_file_output_rows_final = []
-                    membership_no = sub_file.split("\\")[-1].split("-")[0]  # SO711311*** (11 alphanumeric)
-                    enrollment_id = sub_file.split("\\")[-1].split("-")[1]  # 218132 (6 digit)
+                    membership_no = sub_file.split("/")[-1].split("-")[0]  # SO711311*** (11 alphanumeric)
+                    enrollment_id = sub_file.split("/")[-1].split("-")[1]  # 218132 (6 digit)
                     dataframe = (
                         pd.read_csv(
                             sub_file,
@@ -152,17 +148,18 @@ def process_file(file_path, question_dict, master_dict, count_list, pwd_list):
                             output_row = [client_id, enrollment_id, membership_no, len(res)]
                             output_row.extend(item)
                             if index != 0:
-                                input_csv_data[index - 1][-1] = input_csv_data[index-1][-1].replace('"', '')
-                                if input_csv_data[index-1][-1] == '00:00' and int(enrollment_id) in pwd_list:
-                                    input_csv_data[index-1][-1] = '02:40:00'
-                                elif input_csv_data[index-1][-1] == '00:00':
+                                input_csv_data[index - 1][-1] = input_csv_data[index - 1][-1].replace('"', '')
+                                if input_csv_data[index - 1][-1] == '00:00' and int(enrollment_id) in pwd_list:
+                                    input_csv_data[index - 1][-1] = '02:40:00'
+                                elif input_csv_data[index - 1][-1] == '00:00':
                                     input_csv_data[index - 1][-1] = '02:00:00'
-                                if datetime.datetime.strptime(item[12], '%H:%M:%S') > datetime.datetime.strptime(input_csv_data[index-1][-1], '%H:%M:%S'):
+                                if datetime.datetime.strptime(item[12], '%H:%M:%S') > datetime.datetime.strptime(
+                                        input_csv_data[index - 1][-1], '%H:%M:%S'):
                                     error_files.append(sub_file)
                                     mod_timer = datetime.datetime.strptime(item[12], '%H:%M:%S')
                                     # output_row.append(item[12])  # Previous Timer
                                 else:
-                                    mod_timer = datetime.datetime.strptime(input_csv_data[index-1][-1], '%H:%M:%S')
+                                    mod_timer = datetime.datetime.strptime(input_csv_data[index - 1][-1], '%H:%M:%S')
                                     # output_row.append(input_csv_data[index - 1][-1])
                                 response_time = mod_timer - datetime.datetime.strptime(item[12], '%H:%M:%S')
                                 response_time_mins = round(response_time.total_seconds() / 60, 2)
@@ -172,16 +169,21 @@ def process_file(file_path, question_dict, master_dict, count_list, pwd_list):
                                     timer = '02:40:00'
                                 else:
                                     timer = '02:00:00'
-                                if datetime.datetime.strptime(item[12], '%H:%M:%S') > datetime.datetime.strptime(timer, '%H:%M:%S'):
+                                # timer= '02:00:00'
+                                if datetime.datetime.strptime(item[12], '%H:%M:%S') > datetime.datetime.strptime(timer,
+                                                                                                                 '%H:%M:%S'):
                                     error_files.append(sub_file)
-                                response_time = datetime.datetime.strptime(timer, '%H:%M:%S') - datetime.datetime.strptime(item[12], '%H:%M:%S')
+                                response_time = datetime.datetime.strptime(timer,
+                                                                           '%H:%M:%S') - datetime.datetime.strptime(
+                                    item[12], '%H:%M:%S')
                                 response_time_mins = round(response_time.total_seconds() / 60, 2)
                                 response_time_secs = response_time.total_seconds()
                                 # output_row.append(timer)
                             output_row.append(Value)
                             output_row.append('Appeared-Attempted')
                             unique_questions[unique_key] = output_row
-                            if str(item[2]) not in timer_dict.keys():  # timer dictionary with question and response time
+                            if str(item[
+                                       2]) not in timer_dict.keys():  # timer dictionary with question and response time
                                 timer_dict[unique_key] = [response_time, response_time_mins, response_time_secs]
                             else:
                                 timer_dict[unique_key][0] = timer_dict[unique_key][0] + response_time
@@ -196,19 +198,8 @@ def process_file(file_path, question_dict, master_dict, count_list, pwd_list):
                             output_row.append(question_dict[key_ques][3])  # Medium Code
                             output_row.append("08:30-10:30")  # batch time
                             output_row.append(question_dict[key_ques][-1])  # Correct Answer
-                            # status correct incorrect
-                            if str(output_row[8]).split('.')[0] in list(
-                                    str(question_dict[key_ques][-1])) or "8" in list(str(
-                                    question_dict[key_ques][-1])):
-                                output_row.append('Correct')
-                            elif str(output_row[8]).split('.')[0] not in list(str(
-                                    question_dict[key_ques][-1])) or "8" not in list(str(question_dict[key_ques][-1])):
-                                if str(output_row[8]).split('.')[0] == '-1':
-                                    output_row.append('Not Attempted')
-                                else:
-                                    output_row.append('Incorrect')
                         else:
-                            output_row.extend(("NA", "NA", "NA", "NA"))
+                            output_row.extend(("NA", "NA", "NA"))
                         if key_master in master_dict.keys():
                             output_row.append(master_dict[key_master][0])  # zone
                             output_row.append(master_dict[key_master][1])  # city
@@ -243,8 +234,7 @@ def process_file(file_path, question_dict, master_dict, count_list, pwd_list):
 
                 except Exception as ex:
                     traceback.print_exc()
-                    print(sub_file)
-                    with open(output_dir + client_id + '\\' + "Exception.csv", "a", newline="") as f:
+                    with open(output_dir + client_id + '/' + "Exception.csv", "a", newline="") as f:
                         f.write(str(ex))
                     continue
             output_rows.insert(
@@ -272,7 +262,6 @@ def process_file(file_path, question_dict, master_dict, count_list, pwd_list):
                     "medium code",
                     "crr_exam_batch",
                     "crr_crct_key",
-                    "status",
                     # "Candidate Identification",
                     "Zone",
                     "City",
@@ -291,46 +280,44 @@ def process_file(file_path, question_dict, master_dict, count_list, pwd_list):
                     "avg_response_time_secs",
                 ],
             )
-
-            # iibf_usecase_3 = pd.DataFrame(output_rows[1:], columns=output_rows[0])
-            # iibf_usecase_3.name = 'iibf_usecase_3'
-            # dataframe_tables = [iibf_usecase_3]
-            # conn = None
-            # try:
-            #     # connect to the PostgreSQL server
-            #     conn = psycopg2.connect(**conn_params_dic)
-            #     cur = conn.cursor()
-            #     cur.execute(
-            #         """SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' and table_name like '%iibf%' and table_name like '%usecase_3%' ORDER BY table_name ASC""")
-            #     table_name = [table[0] for table in cur.fetchall()]
-            #     for table, frame in zip(table_name, dataframe_tables):
-            #         if table == frame.name:
-            #             buffer = StringIO()
-            #             frame.to_csv(buffer, header=False, index=False)
-            #             buffer.seek(0)
-            #             cur.copy_from(buffer, table, sep=",")
-            #             conn.commit()
-            #     print("Data inserted")
-            # except (Exception, psycopg2.DatabaseError) as error:
-            #     print("Error: %s" % error)
-            #     conn.rollback()
-            #     conn.close()
-            #     print('Insertion failed')
-
+            iibf_usecase_3 = pd.DataFrame(output_rows[1:], columns=output_rows[0])
+            iibf_usecase_3.name = 'iibf_usecase_3'
+            dataframe_tables = [iibf_usecase_3]
+            conn = None
+            try:
+                # connect to the PostgreSQL server
+                conn = psycopg2.connect(**conn_params_dic)
+                cur = conn.cursor()
+                cur.execute(
+                    """SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' and table_name like '%iibf%' and table_name like '%usecase_3%' ORDER BY table_name ASC""")
+                table_name = [table[0] for table in cur.fetchall()]
+                for table, frame in zip(table_name, dataframe_tables):
+                    if table == frame.name:
+                        buffer = StringIO()
+                        frame.to_csv(buffer, header=False, index=False)
+                        buffer.seek(0)
+                        cur.copy_from(buffer, table, sep=",")
+                        conn.commit()
+                print("Data inserted")
+            except (Exception, psycopg2.DatabaseError) as error:
+                print("Error: %s" % error)
+                conn.rollback()
+                conn.close()
+                print('Insertion failed')
             read_files.append([file])
             with open(
-                    output_dir + client_id + "\\transformed\\" + rack_name + "\\" + file_name + ".csv",
+                    output_dir + client_id + "/transformed/" + rack_name + "/" + file_name + ".csv",
                     "w",
                     newline="",
             ) as f:
                 writer = csv.writer(f)
                 writer.writerows(output_rows)
 
-            with open(output_dir + client_id + '\\' + "discrepancies.csv", "a", newline="") as f:
+            with open(output_dir + client_id + '/' + "discrepancies.csv", "a", newline="") as f:
                 writer = csv.writer(f)
                 writer.writerows([error_files])
 
-            with open(output_dir + client_id + '\\' + "Master.csv", "a", newline="") as f:
+            with open(output_dir + client_id + '/' + "Master.csv", "a", newline="") as f:
                 writer = csv.writer(f)
                 writer.writerows(read_files)
         log_message(
@@ -341,19 +328,19 @@ def process_file(file_path, question_dict, master_dict, count_list, pwd_list):
         return count_list
     except Exception as err:
         traceback.print_exc()
-        with open(output_dir + client_id + '\\' + "Exception.csv", "a", newline="") as f:
+        with open(output_dir + client_id + '/' + "Exception.csv", "a", newline="") as f:
             f.write(str(err))
 
 
 def create_output_files(client_name_value, rack_name_value):
-    if not os.path.exists(output_dir + client_name_value + "\\transformed\\" + rack_name_value):
-        os.mkdir(output_dir + client_name_value + "\\transformed\\" + rack_name_value)
-    if not os.path.exists(base_dir + client_name_value + "\\Master.csv"):
-        with open(base_dir + client_name_value + "\\Master.csv", "w", newline="") as f:
+    # if not os.path.exists(output_dir + client_name_value + "/transformed/" + rack_name_value):
+    #     os.mkdir(output_dir + client_name_value + "/transformed/" + rack_name_value)
+    if not os.path.exists(base_dir + client_name_value + "/Master.csv"):
+        with open(base_dir + client_name_value + "/Master.csv", "w", newline="") as f:
             writer = csv.writer(f)
             writer.writerow(master_column_list)
-    if not os.path.exists(base_dir + client_name_value + "\\Exception.csv"):
-        with open(base_dir + client_name_value + "\\Exception.csv", "w", newline="") as f:
+    if not os.path.exists(base_dir + client_name_value + "/Exception.csv"):
+        with open(base_dir + client_name_value + "/Exception.csv", "w", newline="") as f:
             writer = csv.writer(f)
             writer.writerow(exception_column_list)
 
@@ -361,18 +348,20 @@ def create_output_files(client_name_value, rack_name_value):
 def main(list_of_folders):
     start_time = datetime.datetime.now()
     for folder in list_of_folders:
-        list_of_files = glob.glob(folder + '\\' + input_dir + "*")
-        client_name = folder.split("\\")[-1]
+        list_of_files = glob.glob(folder + '/' + input_dir + "*")
+        client_name = folder.split("/")[-1]
         files = [file for file in list_of_files if "Master" not in file and "Exception" not in file]
         for i in list_of_files:
-            diamond_rack_name = i.split('\\')[-1]
+            diamond_rack_name = i.split('/')[-1]
             create_output_files(client_name, diamond_rack_name)
-        question_set = glob.glob(base_dir + client_name + '\\' + 'CRR\\*.csv')
-        master_set = glob.glob(base_dir + client_name + '\\Master\\*.xlsx')
+        question_set = glob.glob(base_dir + client_name + '/' + 'CRR/*.csv')
+        master_set = glob.glob(base_dir + client_name + '/Master/*.xlsx')
         question_dataframe = pd.DataFrame(
-            columns=["Exam Code", "Membership No.", "Enrollment Id of NSE IT", "Medium Code", "Question Paper Id", "Question Id", "Candidate Response", "Correct Answer"])
+            columns=["Exam Code", "Membership No.", "Enrollment Id of NSE IT", "Medium Code", "Question Paper Id",
+                     "Question Id", "Candidate Response", "Correct Answer"])
         master_dataframe = pd.DataFrame(
-            columns=["Region/ Zone", "City", "Venue ID", "Venue Name", "Candidate Id", "Enroll. No.", "Exam Date", "Exam Time", "PWD", "Module ID", "Module Name", "EXAMS"])
+            columns=["Region/ Zone", "City", "Venue ID", "Venue Name", "Candidate Id", "Enroll. No.", "Exam Date",
+                     "Exam Time", "PWD", "Module ID", "Module Name", "EXAMS"])
 
         #  question paper lookup
         for question_template in question_set:
@@ -380,7 +369,8 @@ def main(list_of_folders):
                 question_template,
                 delimiter=",",
                 usecols=[
-                    "Exam Code", "Membership No.", "Enrollment Id of NSE IT", "Medium Code", "Question Paper Id", "Question Id", "Candidate Response", "Correct Answer"
+                    "Exam Code", "Membership No.", "Enrollment Id of NSE IT", "Medium Code", "Question Paper Id",
+                    "Question Id", "Candidate Response", "Correct Answer"
                 ],
                 low_memory=False,
             ).reset_index(drop=True)
@@ -395,7 +385,8 @@ def main(list_of_folders):
         for master_template in master_set:
             master_partial = pd.read_excel(
                 master_template,
-                usecols=["Region/ Zone", "City", "Venue ID", "Venue Name", "Candidate Id", "Enroll. No.", "Exam Date", "Exam Time", "PWD", "Module ID", "Module Name", "EXAMS" ]
+                usecols=["Region/ Zone", "City", "Venue ID", "Venue Name", "Candidate Id", "Enroll. No.", "Exam Date",
+                         "Exam Time", "PWD", "Module ID", "Module Name", "EXAMS"]
             ).reset_index(drop=True)
             master_dataframe = master_dataframe.append(master_partial)
             master_dataframe = master_dataframe.fillna('NA')
@@ -403,14 +394,15 @@ def main(list_of_folders):
             master_pwd_list = master_pwd_dataframe['Enroll. No.'].values.tolist()
             master_csv_data = master_dataframe.values.tolist()
             final_master_dict = {}
-            master_temp = [final_master_dict.update({client_name + "_" + str(item[4]) + "_" + str(item[5]): item}) for item in
+            master_temp = [final_master_dict.update({client_name + "_" + str(item[4]) + "_" + str(item[5]): item}) for
+                           item in
                            master_csv_data]
 
         del question_dataframe, master_dataframe, question_partial, question_csv_data, master_csv_data, question_temp, master_temp
         count_list = []
         final_count_list = []
         # with Pool(3) as pool:
-        #     p = pool.starmap(process_file, zip(files, repeat(final_question_dict), repeat(final_master_dict), repeat(count_list)))
+        #     p = pool.starmap(process_file, zip(files, repeat(final_question_dict), repeat(final_master_dict), repeat(count_list), repeat(master_pwd_list)))
         #     final_count_list.extend(p)
         #     pool.close()
         #     pool.terminate()
@@ -419,7 +411,7 @@ def main(list_of_folders):
         # print(flat_list.count(1))
         for x in files:
             p = process_file(x, final_question_dict, final_master_dict, count_list, master_pwd_list)
-            # print(p)
+            print(p)
     log_message(
         "Fastest Finger processing. Time taken: " + str(datetime.datetime.now() - start_time),
         "info",
@@ -428,26 +420,24 @@ def main(list_of_folders):
 
 def move_to_archive(list_of_folders):
     for folder in list_of_folders:
-        for src in glob.glob(folder + '\\raw\\*'):
-            dest = folder + '\\archived\\'
+        for src in glob.glob(folder + '/raw/*'):
+            dest = folder + '/archived/'
             shutil.move(src, dest)
-        for src in glob.glob(folder + '\\CRR\\*'):
-            dest = folder + '\\archived\\CRR\\'
+        for src in glob.glob(folder + '/CRR/*'):
+            dest = folder + '/archived/CRR/'
             shutil.move(src, dest)
-        for src in glob.glob(folder + '\\Master\\*'):
-            dest = folder + '\\archived\\Master\\'
+        for src in glob.glob(folder + '/Master/*'):
+            dest = folder + '/archived/Master/'
             shutil.move(src, dest)
 
 
-folders = glob.glob(base_dir + '\\IIBF')
+folders = glob.glob(base_dir + 'IIBF')
 main(folders)
 strt_time = datetime.datetime.now()
 log_message(
     "Moving to Archived Directory ", "info", "system_log", )
 # move_to_archive(folders)
 log_message(
-        "File moved successfully. Time taken: " + str(datetime.datetime.now() - strt_time),
-        "info",
-        "system_log", )
-
-
+    "File moved successfully. Time taken: " + str(datetime.datetime.now() - strt_time),
+    "info",
+    "system_log", )

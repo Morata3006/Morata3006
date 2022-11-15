@@ -1,3 +1,4 @@
+
 import csv
 import datetime
 import glob
@@ -10,16 +11,13 @@ import pandas as pd
 # from memory_profiler import profile
 import logging
 
-# base_dir = "/data/Fastest_finger/"
-# input_dir = "Diamond/raw/CRL/"
-# output_dir = "/data/Fastest_finger/Diamond/transformed/"
 base_dir = "C:\\Users\\ashetty\\Desktop\\FastestFinger\\"
 input_dir = "raw\\"
 output_dir = "C:\\Users\\ashetty\\Desktop\\FastestFinger\\"
 
 exception_column_list = ["error"]
 master_column_list = ["filename"]
-log_path = "C:/Users/ashetty/Desktop/DeX/logs/"
+log_path = ".\\logs\\"
 
 
 def log_setup(name, filename, level):
@@ -77,9 +75,12 @@ def process_file(file_path, question_dict, master_dict, count_list):
         for file in glob.glob(file_path + "\\*"):  # batch wise logs folder
             file_name = file.split("\\")[-1]
             read_files = []
+            exception_rows = []
+            low_output_row = []
+            low_sub_file_output_rows = []
             output_rows = []
 
-            for sub_file in glob.glob(file + "\\5208693-5192-N.log"):  # individual candidate log file
+            for sub_file in glob.glob(file + "\\*"):  # individual candidate log file
 
                 try:
                     unique_questions = {}
@@ -102,7 +103,8 @@ def process_file(file_path, question_dict, master_dict, count_list):
                                 "Action",
                                 "SequenceNumber",
                                 "Candidate MachineDateTime",
-                                "Timer"
+                                "Timer",
+                                "MacAddress"
                             ],
                             low_memory=False,
                         )
@@ -110,23 +112,24 @@ def process_file(file_path, question_dict, master_dict, count_list):
                     )
                     dataframe[['IPAddress']] = dataframe[['IPAddress']].fillna('0')
                     res = [i for i in list(dataframe['IPAddress']) if 'PC change' in i]
+                    dataframe_info = dataframe[dataframe['Section Name'].isnull()]  # non attempted questions rows
+                    df_to_list = dataframe_info.values.tolist()
+                    for index, line in enumerate(df_to_list):
+                        line[0] = line[0].replace('INFO - "', "")
+                        line[12] = str(line[12]).replace('"', 'nan')
+                        low_output_row = [client_id, enrollment_id, membership_no, len(res)]
+                        low_output_row.extend(line)
+                        low_sub_file_output_rows.append(low_output_row)
 
+                    # dataframe = dataframe.dropna()
                     dataframe = dataframe.dropna(subset=['Section Name'])
-                    dataframe = dataframe[(dataframe.Action == 'RS')]
-                    dataframe = dataframe.drop_duplicates(subset=['QuestionID', 'Action'], keep='last').reset_index(drop=True)
                     input_csv_data = dataframe.values.tolist()
-                    item = []
-                    option_1_cnt = 0
-                    option_2_cnt = 0
-                    option_3_cnt = 0
-                    option_4_cnt = 0
+                    output_row = []
                     for index, item in enumerate(input_csv_data):
                         if item[4] != -1:
                             item[0] = item[0].replace('INFO - "', "")
                             item[12] = item[12].replace('"', '')
-                            if item[12] == '00:00':
-                                item[12] = '00:00:00'
-                            unique_key = str(item[2]) + '_' + str(item[10])
+                            unique_key = str(item[2])
                             output_row = [client_id, enrollment_id, membership_no, len(res)]
                             output_row.extend(item)
                             output_row.append(Value)
@@ -141,56 +144,55 @@ def process_file(file_path, question_dict, master_dict, count_list):
                             output_row.append(question_dict[key_ques][3])  # Medium Code
                             output_row.append("08:30-10:30")  # batch time
                             output_row.append(question_dict[key_ques][-1])  # Correct Answer
-                            if item[4] == question_dict[key_ques][-1]:
-                                output_row.append('Correct')
-                            else:
-                                output_row.append('Incorrect')
                         else:
-                            output_row.extend(("NA", "NA", "NA", "NA"))
+                            output_row.extend(("NA", "NA", "NA"))
                         if key_master in master_dict.keys():
                             output_row.append(master_dict[key_master][0])  # zone
                             output_row.append(master_dict[key_master][1])  # city
-                            output_row.append(master_dict[key_master][2])  # test center id/ venue id
+                            output_row.append(master_dict[key_master][2])  # test center id\\ venue id
                             output_row.append(master_dict[key_master][3])  # venue name
                             output_row.append(master_dict[key_master][6])  # exam date
                             output_row.append(master_dict[key_master][7])  # exam time
-                            output_row.append(master_dict[key_master][8])  # pwd
-                            output_row.append(master_dict[key_master][9])  # module id
-                            output_row.append(master_dict[key_master][10])  # module name
-                            output_row.append(master_dict[key_master][11])  # exams
-
-                            if index != 0:
-                                key = str(input_csv_data[index - 1][2]) + '_' + str(input_csv_data[index - 1][10])
-                                if item[4] == 1:
-                                    if item[4] == input_csv_data[index-1][4] and output_row[22] == 'Correct' and unique_questions[key][22] == 'Correct':
-                                        option_1_cnt += 1
-                                    else:
-                                        option_1_cnt = 0
-                                    output_row.extend((option_1_cnt, 0, 0, 0))
-                                elif item[4] == 2:
-                                    if item[4] == input_csv_data[index-1][4] and output_row[22] == 'Correct' and unique_questions[key][22] == 'Correct':
-                                        option_2_cnt += 1
-                                    else:
-                                        option_2_cnt = 0
-                                    output_row.extend((0, option_2_cnt, 0, 0))
-                                elif item[4] == 3:
-                                    if item[4] == input_csv_data[index-1][4] and output_row[22] == 'Correct' and unique_questions[key][22] == 'Correct':
-                                        option_3_cnt += 1
-                                    else:
-                                        option_3_cnt = 0
-                                    output_row.extend((0, 0, option_3_cnt, 0))
-                                elif item[4] == 4:
-                                    if item[4] == input_csv_data[index-1][4] and output_row[22] == 'Correct' and unique_questions[key][22] == 'Correct':
-                                        option_4_cnt += 1
-                                    else:
-                                        option_4_cnt = 0
-                                    output_row.extend((0, 0, 0, option_4_cnt))
+                            output_row.append(master_dict[key_master][8])  # module id
+                            output_row.append(master_dict[key_master][9])  # module name
+                            output_row.append(master_dict[key_master][10])  # exams
+                            output_row.append(master_dict[key_master][11])
+                    if not output_row and item:  # for not attempted single row addition
+                        if item[4] == -1:
+                            item[0] = item[0].replace('INFO - "', "")
+                            item[12] = item[12].replace('"', '')
+                            output_row = [client_id, enrollment_id, membership_no, len(res)]
+                            item[12] = '23:00:00'
+                            output_row.extend(item)
+                            output_row.append(Value)
+                            output_row.append('Appeared-Not-Attempted')
+                            unique_key = str(item[2])
+                            unique_questions[unique_key] = output_row
+                            key_ques = str(output_row[0]) + "_" + str(output_row[1]) + "_" + str(
+                                int(output_row[6]))  # diamond_examid_QuestionID
+                            key_master = str(output_row[0]) + "_" + str(output_row[2]) + "_" + str(output_row[1])
+                            if key_ques in question_dict.keys():
+                                output_row.append(question_dict[key_ques][3])
+                                output_row.append("08:30-10:30")
+                                output_row.append(question_dict[key_ques][-1])
                             else:
-                                output_row.extend((0, 0, 0, 0))
-                        else:
-                            output_row.extend(("NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA", 0, 0, 0 ,0))
-
+                                output_row.extend(("NA", "NA", "NA"))
+                            if key_master in master_dict.keys():
+                                output_row.append(master_dict[key_master][0])  # zone
+                                output_row.append(master_dict[key_master][1])  # city
+                                output_row.append(master_dict[key_master][2])  # test center id\\ venue id
+                                output_row.append(master_dict[key_master][3])  # venue name
+                                output_row.append(master_dict[key_master][6])  # exam date
+                                output_row.append(master_dict[key_master][7])  # exam time
+                                output_row.append(master_dict[key_master][8])  # module id
+                                output_row.append(master_dict[key_master][9])  # module name
+                                output_row.append(master_dict[key_master][10])  # exams
+                                output_row.append(master_dict[key_master][11])
                     item.clear()
+                    unique_questions = {
+                        k: v
+                        for k, v in sorted(unique_questions.items(), key=lambda item: item[1])
+                    }
                     sub_file_output_rows = [value for item, value in unique_questions.items()]
                     output_rows.extend(sub_file_output_rows)
                     if sub_file_output_rows:
@@ -200,6 +202,7 @@ def process_file(file_path, question_dict, master_dict, count_list):
                     traceback.print_exc()
                     print(sub_file)
                     continue
+            """
             output_rows.insert(
                 0,
                 [
@@ -226,25 +229,20 @@ def process_file(file_path, question_dict, master_dict, count_list):
                     "crr_exam_batch",
                     "crr_crct_key",
                     # "Candidate Identification",
-                    "question_stat",
                     "Zone",
                     "City",
                     "Test Center ID",
                     "Venue Name",
                     "Exam Date",
                     "Exam Time",
-                    "PWD",
                     "Module ID",
                     "Module name",
                     "Exams",
-                    "option1_cnt",
-                    "option2_cnt",
-                    "option3_cnt",
-                    "option4_cnt",
                 ],
             )
-
+            """
             read_files.append([file])
+
             with open(
                     output_dir + client_id + "\\transformed\\" + rack_name + "\\" + file_name + ".csv",
                     "w",
@@ -293,18 +291,16 @@ def main(list_of_folders):
         question_set = glob.glob(base_dir + client_name + '\\' + 'CRR\\*.csv')
         master_set = glob.glob(base_dir + client_name + '\\Master\\*.xlsx')
         question_dataframe = pd.DataFrame(
-            columns=["Exam Code", "Membership No.", "Enrollment Id of NSE IT", "Medium Code", "Question Paper Id", "Question Id", "Candidate Response", "Correct Answer"])
+            columns=["crr_eed_id", "crr_reg_no", "eed_exm_id", "eed_client_roll_no", "eed_mdm_id", "mdm_name", "eed_tcm_id", "tcm_name", "crr_exam_date", "crr_exam_batch", "qtp_sec_seqno", "Section", "crr_qst_no", "candidate_seq_no", "marks", "negative_marks", "crr_answer", "qtp_qta_val", "crr_crct_id", "crr_crct_key"])
         master_dataframe = pd.DataFrame(
-            columns=["Region/ Zone", "City", "Venue ID", "Venue Name", "Candidate Id", "Enroll. No.", "Exam Date", "Exam Time", "PWD", "Module ID", "Module Name", "EXAMS"])
+            columns=["Sr No", "Zone", "State", "City", "Test Centre id", "Venue Name", "Candidate Id", "Client Reg No", "Candidate name", "Exam Date", "Exam Time", "Module ID", "Candidate Post details", "Category", "DOB", "Gender", "PWD", "PWD Extra Time", "Total Questions", "Non-Attempted Questions", "Graduation degree name", "SSC percentage", "HSC percentage", "Graduation percentage"])
 
         #  question paper lookup
         for question_template in question_set:
             question_partial = pd.read_csv(
                 question_template,
-                delimiter=",",
-                usecols=[
-                    "Exam Code","Membership No.", "Enrollment Id of NSE IT", "Medium Code","Question Paper Id","Question Id","Candidate Response","Correct Answer"
-                ],
+                delimiter=";",
+                usecols=["crr_eed_id", "crr_reg_no", "eed_exm_id", "eed_client_roll_no", "eed_mdm_id", "mdm_name", "eed_tcm_id", "tcm_name", "crr_exam_date", "crr_exam_batch", "qtp_sec_seqno", "Section", "crr_qst_no", "candidate_seq_no", "marks", "negative_marks", "crr_answer", "qtp_qta_val", "crr_crct_id", "crr_crct_key"],
                 low_memory=False,
             ).reset_index(drop=True)
             question_dataframe = question_dataframe.append(question_partial)
@@ -318,8 +314,7 @@ def main(list_of_folders):
         for master_template in master_set:
             master_partial = pd.read_excel(
                 master_template,
-                usecols=["Region/ Zone", "City", "Venue ID", "Venue Name", "Candidate Id", "Enroll. No.", "Exam Date", "Exam Time", "PWD", "Module ID", "Module Name", "EXAMS" ]
-            ).reset_index(drop=True)
+                usecols=["Sr No", "Zone", "State", "City", "Test Centre id", "Venue Name", "Candidate Id", "Client Reg No", "Candidate name", "Exam Date", "Exam Time", "Module ID", "Candidate Post details", "Category", "DOB", "Gender", "PWD", "PWD Extra Time", "Total Questions", " Non-Attempted Questions", "Graduation degree name", "SSC percentage", "HSC percentage", "Graduation percentage"]).reset_index(drop=True)
             master_dataframe = master_dataframe.append(master_partial)
             master_dataframe = master_dataframe.fillna('NA')
             master_csv_data = master_dataframe.values.tolist()
@@ -330,17 +325,17 @@ def main(list_of_folders):
         del question_dataframe, master_dataframe, question_partial, question_csv_data, master_csv_data, question_temp, master_temp
         count_list = []
         final_count_list = []
-        # with Pool(2) as pool:
-        #     p = pool.starmap(process_file, zip(files, repeat(final_question_dict), repeat(final_master_dict), repeat(count_list)))
-        #     final_count_list.extend(p)
-        #     pool.close()
-        #     pool.terminate()
-        #     pool.join()
-        # flat_list = [item for sublist in final_count_list for item in sublist]
-        # print(flat_list.count(1))
+#         with Pool(2) as pool:
+#             p = pool.starmap(process_file, zip(files, repeat(final_question_dict), repeat(final_master_dict), repeat(count_list)))
+#             final_count_list.extend(p)
+#             pool.close()
+#             pool.terminate()
+#             pool.join()
+#         flat_list = [item for sublist in final_count_list for item in sublist]
+#         print(flat_list.count(1))
         for x in files:
             p = process_file(x, final_question_dict, final_master_dict, count_list)
-            # print(p)
+            
     log_message(
         "Fastest Finger processing. Time taken: " + str(datetime.datetime.now() - start_time),
         "info",
@@ -360,7 +355,7 @@ def move_to_archive(list_of_folders):
             shutil.move(src, dest)
 
 
-folders = glob.glob(base_dir + '\\*')
+folders = glob.glob(base_dir + 'Mahajyoti')
 main(folders)
 strt_time = datetime.datetime.now()
 log_message(
@@ -370,5 +365,8 @@ log_message(
         "File moved successfully. Time taken: " + str(datetime.datetime.now() - strt_time),
         "info",
         "system_log", )
+
+
+
 
 

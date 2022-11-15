@@ -77,7 +77,7 @@ def process_file(file_path, question_dict, master_dict, count_list):
             read_files = []
             output_rows = []
 
-            for sub_file in glob.glob(file + "\\510452064-28407-N.txt"):  # individual candidate log file
+            for sub_file in glob.glob(file + "\\5208693-5192-N.log"):  # individual candidate log file
 
                 try:
                     unique_questions = {}
@@ -142,7 +142,7 @@ def process_file(file_path, question_dict, master_dict, count_list):
                             output_row.extend(item)
                             output_row.append(Value)
                             output_row.append('Appeared-Attempted')
-                            if 'PC Change' in input_csv_data[index - 1][8] and index != 0:
+                            if 'PC Change' in input_csv_data[index - 1][8] and index != 0:  # pc counter column
                                 pc_counter += 1
                                 output_row.append(pc_counter)
                             else:
@@ -158,13 +158,13 @@ def process_file(file_path, question_dict, master_dict, count_list):
                                 key_master = str(output_row[0]) + "_" + str(output_row[2]) + "_" + str(output_row[1])
                             else:
                                 if str(input_csv_data[index][2]) == 'nan' and str(
-                                        input_csv_data[index - 1][2]) == 'nan':
-                                    if index == 0 or index - 1 == 0:
+                                        input_csv_data[index - 1][2]) == 'nan':  # two quick pc changes
+                                    if index == 0 or index - 1 == 0:  # at the very start
                                         correct_store = '0|'
                                         incorrect_store = '0|'
                                         attempt_store = '0|'
                                     else:
-                                        if flag == 0:
+                                        if flag == 0:  # at the in between stage
                                             correct_store = str(correct_cnt) + '|0|'
                                             incorrect_store = str(incorrect_cnt) + '|0|'
                                             attempt_store = str(attempt_cnt) + '|0|'
@@ -172,11 +172,11 @@ def process_file(file_path, question_dict, master_dict, count_list):
                                             incorrect_cnt = 0
                                             attempt_cnt = 0
                                             flag = 1
-                                        elif flag == 1:
+                                        elif flag == 1:  # trying to handle more than 2 quick pc changes
                                             correct_store = correct_store + '0|'
                                             incorrect_store = incorrect_store + '0|'
                                             attempt_store = attempt_store + '0|'
-                                if input_csv_data[index] == input_csv_data[-1]:
+                                if input_csv_data[index] == input_csv_data[-1]:  # at the very end
                                     correct_store = correct_store + str(correct_cnt)
                                     incorrect_store = incorrect_store + str(incorrect_cnt)
                                     attempt_store = attempt_store + str(attempt_cnt)
@@ -195,7 +195,7 @@ def process_file(file_path, question_dict, master_dict, count_list):
                             else:
                                 output_row.append('Incorrect')
                             # store logic snippet start
-                            if pc_counter == prev_pc_counter+1 and flag != 1:
+                            if pc_counter == prev_pc_counter+1 and flag != 1:  # general pc change occurs
                                 correct_store = correct_store + str(correct_cnt)+'|'
                                 incorrect_store = incorrect_store + str(incorrect_cnt) + '|'
                                 attempt_store = attempt_store + str(attempt_cnt) + '|'

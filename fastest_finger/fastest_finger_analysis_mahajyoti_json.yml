@@ -1,0 +1,383 @@
+
+### processing for tango
+#   mahajytoi
+# diamon
+
+input{
+  file{
+    #path =>[ "/data/ff/Mahajyoti/transformed_json/CRL_12Jul/*json"]
+    path => "/data/ff/Mahajyoti/transformed_json/*/*.json"
+   max_open_files => 100000
+    start_position => "beginning"
+    #sincedb_path => "/etc/logstash/since_db_path.txt"
+    sincedb_path => "/dev/null"
+    mode => "read"
+    add_field => { "path_name" => "%{path}" }
+    #file_chunk_count => "1024"
+    #file_chunk_size => "65536"
+    file_completed_action => "log"
+    file_completed_log_path => "/data/Fastest_finger/Diamond/transformed/Diamond_fastest_finger/logstash.txt"
+ }
+}
+
+filter{
+
+# ruby 
+#{
+#  code => "logger.info ('logs ingested from file path ' + event.get('path_name'))"
+#} 
+
+       
+json {
+        source => "message"
+      }
+
+# ruby 
+#{
+#  code => "logger.info ('EED id is  ' + event.get('eed_id'))"
+#}
+
+
+
+  mutate{ convert => ["QuestionID", "integer"]  }
+  mutate{ convert => ["CurrentQuestionNumber", "integer"]  }
+  mutate{ convert => ["OptionSelected", "integer"]  }
+  mutate{ convert => ["examid", "string"]  }
+  mutate{ convert => ["SectionalQuestionNumber", "integer"]  }
+  mutate{ convert => ["Value", "integer"]  }
+  mutate{ convert => ["eed_id", "string"]  }
+  mutate{ convert => ["crr_crct_key", "integer"]  }
+
+#-----------------------
+mutate{add_field => { "eed_id-examid" => "%{eed_id}%{examid}" } }
+#-----------------------
+
+
+if [Exam Date] == "NA" or [Exam Time] == "NA" {
+   drop { }
+
+}
+else {
+
+ grok {
+                match => { "Exam Date" => "%{YEAR:exam_year}-%{MONTHNUM:exam_month}-%{MONTHDAY:exam_date}" }
+                add_field => {"str_exam_date" => "%{exam_year}-%{exam_month}-%{exam_date}"}
+            }
+}
+
+date{
+ match => [  "Exam Date" , "dd/MM/YYYY", "dd/MM/YYYY HH:mm", "dd/MM/YYYY HH:mm:ss", "YYYY-MM-dd HH:mm:ss" ]
+  target => "Exam Date"
+}
+
+
+
+
+
+#--------------------------------------------Lookup-----------------------------------------------------
+  if [crr_crct_key] == [OptionSelected]  {
+                 mutate {
+                         add_field => { "Status" => "Correct" }
+                 }
+         }
+         else {
+                 mutate {
+                        add_field => { "Status" => "Incorrect" }
+                 }
+         }         
+
+mutate {
+    add_field => { "str_batch_time" => "%{crr_exam_batch}" }
+}
+
+
+mutate {
+    split => { "crr_exam_batch" => "-" }
+    add_field => { "start_time" => "%{[crr_exam_batch][0]}" }
+    add_field => { "end_time" => "%{[crr_exam_batch][1]}" }
+}
+mutate {
+    split => { "start_time" => ":" }
+    add_field => { "start_time_hour" => "%{[start_time][0]}" }
+    add_field => { "start_time_min" => "%{[start_time][1]}" }
+}
+  mutate {
+    split => { "end_time" => ":" }
+    add_field => { "end_time_hour" => "%{[end_time][0]}" }
+    add_field => { "end_time_min" => "%{[end_time][1]}" }
+}
+
+mutate {
+    add_field => { "Total_Time" => "" }
+}
+
+ mutate{ convert => ["start_time", "integer"]  }
+ mutate{ convert => ["end_time", "integer"]  }
+ mutate{ convert => ["start_time_hour", "integer"]  }
+ mutate{ convert => ["start_time_min", "integer"]  }
+ mutate{ convert => ["end_time_hour", "integer"]  }
+ mutate{ convert => ["end_time_min", "integer"]  }
+ mutate{ convert => ["Total_Time", "integer"]  }
+ mutate{ convert => ["crr_crct_key", "integer"]  }
+
+
+if [PWD Extra Time] == "30" and [PWD] == "YES"
+{
+ruby {
+        code => "event.set('Total_Time', ((event.get('end_time_hour') - event.get('start_time_hour')) * 60) + (event.get('end_time_min') - event.get('start_time_min') )+ 30 )"
+
+
+}
+}
+
+else {
+ruby {
+        code => "event.set('Total_Time', ((event.get('end_time_hour') - event.get('start_time_hour')) * 60) + (event.get('end_time_min') - event.get('start_time_min')))"
+                }
+ }
+
+
+
+#------------------Revised Timer-------------------
+mutate {
+                add_field => {"Timer_in_mins" => ""}
+                #add_field => {"Timer_UTC_mins" => ""}
+                add_field => {"Timer_elapsed_mins" => ""}
+                add_field => {"Timer_elapsed_secs" => ""}
+                add_field => {"Timer_in_secs" => ""}
+                #add_field => {"Timer_UTC_secs" => ""}
+		
+        }
+
+ mutate {
+                       
+                        convert => ["Timer_elapsed_mins", "integer"]
+                        convert => ["Timer_elapsed_secs", "integer"]
+                        convert => ["Timer_in_mins", "integer"]
+                        #convert => ["Timer_UTC_mins", "integer"]
+                        #convert => ["Timer_UTC_secs", "integer"]
+                        convert => ["Timer_in_secs", "integer"]
+			
+          }
+
+ grok {
+                match => { "Timer" => "%{NUMBER:hour:int}:%{NUMBER:min:int}:%{NUMBER:sec:int}" }
+            }
+
+
+
+        ruby {
+                code => "event.set('Timer_in_mins', (event.get('hour') * 60) + (event.get('min')))
+                         event.set('Timer_in_secs', (event.get('hour') * 3600) + (event.get('min') * 60) + event.get('sec'))"
+
+        }
+        ruby {
+                code => "event.set('Timer_elapsed_mins', event.get('Total_Time') - event.get('Timer_in_mins'))   #7200
+                         event.set('hour', event.get('Timer_elapsed_mins') / (60 * 60))
+                         event.set('min', event.get('Timer_elapsed_mins') / 60 )
+                         event.set('min', event.get('min') % 60)
+                         event.set('Timer_elapsed_secs', (event.get('Total_Time')*60) - event.get('Timer_in_secs'))   #9000/7200
+                         event.set('hour', event.get('Timer_elapsed_secs') / (60 * 60))
+                         event.set('min', event.get('Timer_elapsed_secs') / 60 )
+                         event.set('min', event.get('min') % 60)
+                         event.set('sec', event.get('Timer_elapsed_secs') % 60)
+                        "
+        }
+
+        mutate {
+          remove_field => ["host"]
+        }
+
+
+#---------------------------------------------------------
+
+
+
+if [Status] == "Correct" {
+  mutate {
+    add_field => {"correct_cnt" => "1"}
+    add_field => {"incorrect_cnt" => "0"}
+}
+}
+else {
+  mutate {
+    add_field => {"correct_cnt" => "0"}
+    add_field => {"incorrect_cnt" => "1"}
+}
+}
+mutate {
+   convert => ["correct_cnt", "integer"]
+   convert => ["incorrect_cnt", "integer"]
+}
+
+
+
+
+######################## batch wise correct and attempted start #############################
+
+range {
+   ranges => ["Timer_elapsed_mins", -10000, -1, "tag:not_attempted",
+              "Timer_elapsed_mins", 0, 15, "tag:0_15",
+              "Timer_elapsed_mins", 16, 30, "tag:16_30",
+	      "Timer_elapsed_mins", 31, 45, "tag:31_45",
+              "Timer_elapsed_mins", 46, 60, "tag:46_60",
+              "Timer_elapsed_mins", 61, 75, "tag:61_75",
+              "Timer_elapsed_mins", 76, 90, "tag:76_90",
+              "Timer_elapsed_mins", 91, 105, "tag:91_105",
+              "Timer_elapsed_mins", 106, 120, "tag:106_120",
+              "Timer_elapsed_mins", 121, 135, "tag:121_135",
+              "Timer_elapsed_mins", 136, 150, "tag:136_150",
+              "Timer_elapsed_mins", 151, 165, "tag:151_165",
+              "Timer_elapsed_mins", 166, 180, "tag:166_180" ]
+
+}
+
+
+if "0_15" in [tags] and [Status] == "Correct" {
+   mutate {add_field => {"0_15_correct" => "1"}}
+   
+}
+if "16_30" in  [tags] and [Status] == "Correct" {
+   mutate {add_field => {"16_30_correct" => "1"}}
+}
+if "31_45" in  [tags] and [Status] == "Correct" {
+   mutate {add_field => {"31_45_correct" => "1"}}
+}
+if "46_60" in  [tags] and [Status] == "Correct" {
+   mutate {add_field => {"46_60_correct" => "1"}}
+}
+if "61_75" in  [tags] and [Status] == "Correct" {
+   mutate {add_field => {"61_75_correct" => "1"}}
+}
+if "76_90" in  [tags] and [Status] == "Correct" {
+   mutate {add_field => {"76_90_correct" => "1"}}
+}
+if "91_105" in  [tags] and [Status] == "Correct" {
+   mutate {add_field => {"91_105_correct" => "1"}}
+}
+if "106_120" in  [tags] and [Status] == "Correct" {
+   mutate {add_field => {"106_120_correct" => "1"}}
+}
+if "121_135" in  [tags] and [Status] == "Correct" {
+   mutate {add_field => {"121_135_correct" => "1"}}
+}
+if "136_150" in  [tags] and [Status] == "Correct" {
+   mutate {add_field => {"136_150_correct" => "1"}}
+}
+if "151_165" in  [tags] and [Status] == "Correct" {
+   mutate {add_field => {"151_165_correct" => "1"}}
+}
+if "166_180" in  [tags] and [Status] == "Correct" {
+   mutate {add_field => {"166_180_correct" => "1"}}
+}
+
+if "0_15" in [tags] {
+   mutate {add_field => {"0_15_attempted" => "1"}}
+}
+if "16_30" in [tags] {
+   mutate {add_field => {"16_30_attempted" => "1"}}
+}
+if "31_45" in  [tags] {
+   mutate {add_field => {"31_45_attempted" => "1"}}
+}
+if "46_60" in  [tags] {
+   mutate {add_field => {"46_60_attempted" => "1"}}
+}
+if "61_75" in  [tags]  {
+   mutate {add_field => {"61_75_attempted" => "1"}}
+}
+if "76_90" in  [tags]  {
+   mutate {add_field => {"76_90_attempted" => "1"}}
+}
+if "91_105" in  [tags]  {
+   mutate {add_field => {"91_105_attempted" => "1"}}
+}
+if "106_120" in  [tags]  {
+   mutate {add_field => {"106_120_attempted" => "1"}}
+}
+if "121_135" in  [tags]  {
+   mutate {add_field => {"121_135_attempted" => "1"}}
+}
+if "136_150" in  [tags]  {
+   mutate {add_field => {"136_150_attempted" => "1"}}
+}
+if "151_165" in  [tags]  {
+   mutate {add_field => {"151_165_attempted" => "1"}}
+}
+if "166_180" in  [tags]  {
+   mutate {add_field => {"166_180_attempted" => "1"}}
+}
+
+
+mutate {
+
+                        convert => ["0_15_correct", "integer"]
+			convert => ["0_15_attempted", "integer"]
+			convert => ["16_30_correct", "integer"]
+			convert => ["16_30_attempted", "integer"]
+			convert => ["31_45_correct", "integer"]
+			convert => ["31_45_attempted", "integer"]
+			convert => ["46_60_correct", "integer"]
+			convert => ["46_60_attempted", "integer"]
+			convert => ["61_75_correct", "integer"]
+			convert => ["61_75_attempted", "integer"]
+			convert => ["76_90_correct", "integer"]
+			convert => ["76_90_attempted", "integer"]
+			convert => ["91_105_correct", "integer"]
+			convert => ["91_105_attempted", "integer"]
+			convert => ["106_120_correct", "integer"]
+			convert => ["106_120_attempted", "integer"]
+			convert => ["121_135_correct", "integer"]
+			convert => ["121_135_attempted", "integer"]
+			convert => ["136_150_correct", "integer"]
+			convert => ["136_150_attempted", "integer"]
+			convert => ["151_165_correct", "integer"]
+			convert => ["151_165_attempted", "integer"]
+			convert => ["166_180_correct", "integer"]
+			convert => ["166_180_attempted", "integer"]
+                        lowercase => ["clientid"]
+                        convert => ["HSC percentage", "integer"]
+                        convert => ["SSC percentage", "integer"]
+                        convert => ["Graduation percentage", "integer"]
+                        convert => ["Total Questions", "integer"]
+                        convert => ["Non-Attempted Questions", "integer"]
+
+}
+
+
+
+############# finish ##################
+
+
+ mutate {     #renaming field beacuse it was taking other field name i renamed it by data field name.
+                rename => { "examid" => "ExamId" }
+                rename => { "Section Name" => "Section_Name" }
+                rename => {"crr_exam_batch" => "Batch_time"}
+        }
+
+fingerprint {
+    source => [ "eed_id", "RegistrationNo", "Exam Date" ]
+    concatenate_sources => true
+    target => "[@metadata][fingerprint]"
+    method => "MURMUR3"
+ }
+
+mutate
+        {
+        remove_field => [ "message","path","@version","host"]
+     }   
+ 
+}
+
+output
+{
+elasticsearch {
+      hosts => [ "https://172.31.23.212:9200","https://172.31.28.219:9200", "https://172.31.19.140:9200" ]
+      #document_id => "%{[@metadata][fingerprint]}"
+      index => "mahajyoti"
+      user => "elastic"
+      password => "Dexanalytics@2022#"
+      ssl => true
+      cacert => "/etc/logstash/elkcerts/ca.crt"
+}
+}

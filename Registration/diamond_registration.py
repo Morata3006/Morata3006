@@ -5,7 +5,6 @@ import math
 import os
 import sys
 import traceback
-
 import pandas as pd
 import datetime
 import numpy as np
@@ -14,9 +13,6 @@ from geopy.exc import GeocoderTimedOut
 from geopy.geocoders import Nominatim
 import timeit
 
-# base_dir = "/home/nsedex/Registration/"
-# input_dir = "temp/dex/full_data/"
-# output_dir = "/home/nsedex/Registration/temp/dex/full_data/"
 
 base_dir = "C:\\Users\\ashetty\\Desktop\\Registration\\"
 input_dir = "*\\raw\\*\\"
@@ -100,7 +96,6 @@ def process_file(file_name):
         if file_name not in Master_list:
             log_message("Current working file: " + file_name, "info", "system_log", )
             read_files = []
-            exception_rows = []
             output_rows = []
             extension = file_name.split("\\")[-1].split(".")[-1]
             month_year = file_name.split("\\")[-2]
@@ -118,12 +113,20 @@ def process_file(file_name):
                     return
                 dataframe = dataframe.fillna('')
                 dataframe['Client_name'] = client_name
+                # mapping_dict = {"Applicant’s First Name:": "First Name:",}
+                mapping_dict = {}
+                with open('C:/Users/ashetty/Desktop/Registration/Diamond/mapping_cols.csv') as map_cols:
+                    reader = csv.reader(map_cols)
+                    header = next(reader)
+                    for line in reader:
+                        mapping_dict[line[0]] = line[1]
+                dataframe.rename(columns=mapping_dict, inplace=True)
                 input_csv_data = [dataframe.columns.tolist()]
                 values = dataframe.values.tolist()
                 input_csv_data.extend(values)
 
                 default_columns_names = ['Registration Number', 'oum_user_id', 'Reference Number', 'oum_user_pk',
-                                         'Title', 'Applicant’s First Name:', 'Middle Name', 'Last Name', 'Applicant Full Name',
+                                         'Title', 'First Name:', 'Middle Name', 'Last Name', 'Applicant Full Name',
                                          "Father's name", "Husband's name", "Mother's name", 'Gender', 'Nationality',
                                          'Email ID',
                                          'Mobile No.', 'Are you eligible to avail the services of Scribe',
@@ -214,16 +217,7 @@ def process_file(file_name):
                         new_df[default_columns_names[i]] = new_df[default_columns_names[i]].replace(['\'-'], None)
                     else:
                         new_df[default_columns_names[i]] = "NaN"
-                # dict = {'REG ID': 'registrationnumber',
-                #         'POST': 'Post_Course_Certificate',
-                #         'GENDER': 'Gender',
-                #         'CATEGORY': 'Category',
-                #         'Address City / District': 'Address_City_District',
-                #         'Exam Date': 'Exam_Date'
-                #         }
-                # new_df.rename(columns=dict,
-                #               inplace=True)
-                new_df.to_csv(output_dir + client_name + '\\transformed\\' + month_year + '\\' + client_name + '_registration.csv', header=None, index=False)
+                new_df.to_csv(output_dir + client_name + '\\transformed\\' + month_year + '\\' + client_name + '_registration.csv', header=True, index=False)
 
                 with open(base_dir + client_name + "\\Master.csv", "a", newline="") as f:
                     writer = csv.writer(f)

@@ -10,9 +10,6 @@ import pandas as pd
 # from memory_profiler import profile
 import logging
 
-# base_dir = "/data/Fastest_finger/"
-# input_dir = "Diamond/raw/CRL/"
-# output_dir = "/data/Fastest_finger/Diamond/transformed/"
 base_dir = "C:\\Users\\ashetty\\Desktop\\FastestFinger\\"
 input_dir = "raw\\"
 output_dir = "C:\\Users\\ashetty\\Desktop\\FastestFinger\\"
@@ -65,6 +62,7 @@ log_setup(
 def process_file(file_path, question_dict, master_dict, count_list):
     try:
 
+        exam_start_str = "Clicked on 'OK' of Start Exam Dialog Box|Clicked on 'Start Exam' button"
         client_id = file_path.split("\\")[-3]
         log_message(
             "Current working directory: " + file_path,
@@ -109,21 +107,36 @@ def process_file(file_path, question_dict, master_dict, count_list):
                             .reset_index(drop=True)
                     )
                     dataframe[['IPAddress']] = dataframe[['IPAddress']].fillna('0')
+                    dataframe[['Action']] = dataframe[['Action']].fillna('NA')
+                    ind = dataframe.index[dataframe['Action'].str.contains(exam_start_str)]  # identifying index for Ok button
+                    if list(ind):
+                        dataframe = dataframe.iloc[ind[0]+1:]  # taking only rows below the OK button row
                     res = [i for i in list(dataframe['IPAddress']) if 'PC change' in i]
+                    dataframe.loc[dataframe['IPAddress'].str.contains('PC Change', case=False), 'IPAddress'] = 'PC Change Point'
+                    dataframe['Section Name'] = dataframe['Section Name'].fillna('nan')
 
-                    dataframe = dataframe.dropna(subset=['Section Name'])
-                    dataframe = dataframe[(dataframe.Action == 'RS')]
+                    dataframe = dataframe[(dataframe.Action == 'RS') | (dataframe.IPAddress == 'PC Change Point')]
                     dataframe = dataframe.drop_duplicates(subset=['QuestionID', 'Action'], keep='last').reset_index(drop=True)
                     input_csv_data = dataframe.values.tolist()
                     item = []
+                    x = 1
+                    pc_counter = 0
+                    flag = 0
+                    pc_counter_list = []
+                    correct_cnt = 0
+                    incorrect_cnt = 0
+                    attempt_cnt = 0
+                    correct_store = ''
+                    attempt_store = ''
+                    incorrect_store = ''
                     option_1_cnt = 0
                     option_2_cnt = 0
                     option_3_cnt = 0
                     option_4_cnt = 0
                     for index, item in enumerate(input_csv_data):
-                        if item[4] != -1:
+                        if item[4] != -1 and (item[9] == 'RS' or item[8] == 'PC Change Point'):
                             item[0] = item[0].replace('INFO - "', "")
-                            item[12] = item[12].replace('"', '')
+                            item[12] = str(item[12]).replace('"', '')
                             if item[12] == '00:00':
                                 item[12] = '00:00:00'
                             unique_key = str(item[2]) + '_' + str(item[10])
@@ -131,20 +144,84 @@ def process_file(file_path, question_dict, master_dict, count_list):
                             output_row.extend(item)
                             output_row.append(Value)
                             output_row.append('Appeared-Attempted')
-                            unique_questions[unique_key] = output_row
-                            key_ques = str(output_row[0]) + "_" + str(output_row[1]) + "_" + str(
+                            if 'PC Change' in input_csv_data[index - 1][8] and index != 0:  # pc counter column
+                                pc_counter += 1
+                                output_row.append(pc_counter)
+                            else:
+                                output_row.append(pc_counter)
+                            if unique_questions:
+                                prev_pc_counter = list(unique_questions.items())[-1][1][19]
+                            else:
+                                prev_pc_counter = 0
+                            if str(output_row[6]) != 'nan':
+                                unique_questions[unique_key] = output_row
+                                key_ques = str(output_row[0]) + "_" + str(output_row[1]) + "_" + str(
                                 int(output_row[6]))  # diamond_eedid_QuestionID
-                            key_master = str(output_row[0]) + "_" + str(output_row[2]) + "_" + str(output_row[1])
+                                key_master = str(output_row[0]) + "_" + str(output_row[2]) + "_" + str(output_row[1])
+                            else:
+                                if str(input_csv_data[index][2]) == 'nan' and str(
+                                        input_csv_data[index - 1][2]) == 'nan':  # two quick pc changes
+                                    if index == 0 or index - 1 == 0:  # at the very start
+                                        correct_store = '0|'
+                                        incorrect_store = '0|'
+                                        attempt_store = '0|'
+                                    else:
+                                        if flag == 0:  # at the in between stage
+                                            correct_store = str(correct_cnt) + '|0|'
+                                            incorrect_store = str(incorrect_cnt) + '|0|'
+                                            attempt_store = str(attempt_cnt) + '|0|'
+                                            correct_cnt = 0
+                                            incorrect_cnt = 0
+                                            attempt_cnt = 0
+                                            flag = 1
+                                        elif flag == 1:  # trying to handle more than 2 quick pc changes
+                                            correct_store = correct_store + '0|'
+                                            incorrect_store = incorrect_store + '0|'
+                                            attempt_store = attempt_store + '0|'
+                                if input_csv_data[index] == input_csv_data[-1]:  # at the very end
+                                    correct_store = correct_store + str(correct_cnt)
+                                    incorrect_store = incorrect_store + str(incorrect_cnt)
+                                    attempt_store = attempt_store + str(attempt_cnt)
+                                key_ques = ''
+                                key_master = ''
+                                unique_questions['PC_change_'+str(x)] = output_row
+                                x += 1
                         else:
                             continue
                         if key_ques in question_dict.keys():
                             output_row.append(question_dict[key_ques][3])  # Medium Code
                             output_row.append("08:30-10:30")  # batch time
                             output_row.append(question_dict[key_ques][-1])  # Correct Answer
-                            if item[4] == question_dict[key_ques][-1]:
+                            if item[4] == output_row[22]:
                                 output_row.append('Correct')
                             else:
                                 output_row.append('Incorrect')
+                            # store logic snippet start
+                            if pc_counter == prev_pc_counter+1 and flag != 1:  # general pc change occurs
+                                correct_store = correct_store + str(correct_cnt)+'|'
+                                incorrect_store = incorrect_store + str(incorrect_cnt) + '|'
+                                attempt_store = attempt_store + str(attempt_cnt) + '|'
+                                correct_cnt = 0
+                                incorrect_cnt = 0
+                                attempt_cnt = 0
+                                if output_row[23] == 'Correct':
+                                    attempt_cnt += 1
+                                    correct_cnt += 1
+                                elif output_row[23] == 'Incorrect':
+                                    attempt_cnt += 1
+                                    incorrect_cnt += 1
+                            elif pc_counter == prev_pc_counter:
+                                if output_row[23] == 'Correct':
+                                    attempt_cnt += 1
+                                    correct_cnt += 1
+                                elif output_row[23] == 'Incorrect':
+                                    attempt_cnt += 1
+                                    incorrect_cnt += 1
+                                if input_csv_data[index] == input_csv_data[-1]:
+                                    correct_store = correct_store + str(correct_cnt)
+                                    incorrect_store = incorrect_store + str(incorrect_cnt)
+                                    attempt_store = attempt_store + str(attempt_cnt)
+
                         else:
                             output_row.extend(("NA", "NA", "NA", "NA"))
                         if key_master in master_dict.keys():
@@ -162,25 +239,25 @@ def process_file(file_path, question_dict, master_dict, count_list):
                             if index != 0:
                                 key = str(input_csv_data[index - 1][2]) + '_' + str(input_csv_data[index - 1][10])
                                 if item[4] == 1:
-                                    if item[4] == input_csv_data[index-1][4] and output_row[22] == 'Correct' and unique_questions[key][22] == 'Correct':
+                                    if item[4] == input_csv_data[index-1][4] and output_row[23] == 'Correct' and unique_questions[key][23] == 'Correct':
                                         option_1_cnt += 1
                                     else:
                                         option_1_cnt = 0
                                     output_row.extend((option_1_cnt, 0, 0, 0))
                                 elif item[4] == 2:
-                                    if item[4] == input_csv_data[index-1][4] and output_row[22] == 'Correct' and unique_questions[key][22] == 'Correct':
+                                    if item[4] == input_csv_data[index-1][4] and output_row[23] == 'Correct' and unique_questions[key][23] == 'Correct':
                                         option_2_cnt += 1
                                     else:
                                         option_2_cnt = 0
                                     output_row.extend((0, option_2_cnt, 0, 0))
                                 elif item[4] == 3:
-                                    if item[4] == input_csv_data[index-1][4] and output_row[22] == 'Correct' and unique_questions[key][22] == 'Correct':
+                                    if item[4] == input_csv_data[index-1][4] and output_row[23] == 'Correct' and unique_questions[key][23] == 'Correct':
                                         option_3_cnt += 1
                                     else:
                                         option_3_cnt = 0
                                     output_row.extend((0, 0, option_3_cnt, 0))
                                 elif item[4] == 4:
-                                    if item[4] == input_csv_data[index-1][4] and output_row[22] == 'Correct' and unique_questions[key][22] == 'Correct':
+                                    if item[4] == input_csv_data[index-1][4] and output_row[23] == 'Correct' and unique_questions[key][23] == 'Correct':
                                         option_4_cnt += 1
                                     else:
                                         option_4_cnt = 0
@@ -188,10 +265,59 @@ def process_file(file_path, question_dict, master_dict, count_list):
                             else:
                                 output_row.extend((0, 0, 0, 0))
                         else:
-                            output_row.extend(("NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA", 0, 0, 0 ,0))
-
+                            output_row.extend(("NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA"))
+                    # if not output_row and item:  # for not attempted single row addition
+                    #     if item[4] == -1:
+                    #         item[0] = item[0].replace('INFO - "', "")
+                    #         item[12] = item[12].replace('"', '')
+                    #         output_row = [client_id, enrollment_id, membership_no, len(res)]
+                    #         item[12] = '23:00:00'
+                    #         output_row.extend(item)
+                    #         output_row.append(Value)
+                    #         output_row.append('Appeared-Not-Attempted')
+                    #         output_row.append(0)
+                    #         unique_key = str(item[2])
+                    #         unique_questions[unique_key] = output_row
+                    #         key_ques = str(output_row[0]) + "_" + str(output_row[1]) + "_" + str(
+                    #             int(output_row[6]))  # diamond_examid_QuestionID
+                    #         key_master = str(output_row[0]) + "_" + str(output_row[2]) + "_" + str(output_row[1])
+                    #         if key_ques in question_dict.keys():
+                    #             output_row.append(question_dict[key_ques][3])
+                    #             output_row.append("08:30-10:30")
+                    #             output_row.append(question_dict[key_ques][-1])
+                    #         else:
+                    #             output_row.extend(("NA", "NA", "NA"))
+                    #         if key_master in master_dict.keys():
+                    #             output_row.append(master_dict[key_master][0])  # zone
+                    #             output_row.append(master_dict[key_master][1])  # city
+                    #             output_row.append(master_dict[key_master][2])  # test center id/ venue id
+                    #             output_row.append(master_dict[key_master][3])  # venue name
+                    #             output_row.append(master_dict[key_master][6])  # exam date
+                    #             output_row.append(master_dict[key_master][7])  # exam time
+                    #             output_row.append(master_dict[key_master][8])  # pwd
+                    #             output_row.append(master_dict[key_master][9])  # module id
+                    #             output_row.append(master_dict[key_master][10])  # module name
+                    #             output_row.append(master_dict[key_master][11])  # exams
+                    #         else:
+                    #             output_row.extend(("NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA", "NA"))
                     item.clear()
+                    # unique_questions = {
+                    #     k: v
+                    #     for k, v in sorted(unique_questions.items(), key=lambda item: item[1])
+                    # }
                     sub_file_output_rows = [value for item, value in unique_questions.items()]
+                    if sub_file_output_rows:
+                        for ele in sub_file_output_rows:
+                            pc_counter_list.append(ele[19])
+                        max_cnt = sorted(pc_counter_list)[-1]
+                    for element in sub_file_output_rows:
+                        element.extend((correct_store, incorrect_store, attempt_store))
+                        if element[19] == 0:
+                            element.append('No PC change')
+                        elif element[19] == 1:
+                            element.append('First PC change')
+                        elif element[19] == max_cnt:
+                            element.append('Last PC change')
                     output_rows.extend(sub_file_output_rows)
                     if sub_file_output_rows:
                         count_list.append(1)
@@ -222,11 +348,12 @@ def process_file(file_path, question_dict, master_dict, count_list):
                     "Timer",
                     "Value",
                     "appearance status",
+                    "pc_counter",
                     "medium code",
                     "crr_exam_batch",
                     "crr_crct_key",
                     # "Candidate Identification",
-                    "question_stat",
+                    "Status",
                     "Zone",
                     "City",
                     "Test Center ID",
@@ -241,10 +368,15 @@ def process_file(file_path, question_dict, master_dict, count_list):
                     "option2_cnt",
                     "option3_cnt",
                     "option4_cnt",
+                    "correct_store",
+                    "incorrect_store",
+                    "attempted_store",
+                    "pc_change_status",
                 ],
             )
 
             read_files.append([file])
+
             with open(
                     output_dir + client_id + "\\transformed\\" + rack_name + "\\" + file_name + ".csv",
                     "w",
