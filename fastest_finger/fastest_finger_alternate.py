@@ -135,8 +135,8 @@ def process_exod_file(file_path, question_dict, master_dict, registration_dict, 
                         else:
                             continue
                         if key_ques in question_dict.keys():
-                            output_row.append(question_dict[key_ques][5])  # mdm name
-                            output_row.append(question_dict[key_ques][9])  # crr exam batch
+                            output_row.append(question_dict[key_ques][-3])  # mdm name
+                            output_row.append(question_dict[key_ques][-4])  # crr exam batch
                             output_row.append(question_dict[key_ques][-2])  # crr_crct_key
                             if str(output_row[9]).split('.')[0] in list(str(question_dict[key_ques][-2])) or "8" in list(str(
                                     question_dict[key_ques][-2])):
@@ -193,8 +193,8 @@ def process_exod_file(file_path, question_dict, master_dict, registration_dict, 
                                 int(output_row[7]))  # diamond_examid_QuestionID
                             key_master = str(output_row[0]) + "_" + str(output_row[3])
                             if key_ques in question_dict.keys():
-                                output_row.append(question_dict[key_ques][5])
-                                output_row.append(question_dict[key_ques][9])
+                                output_row.append(question_dict[key_ques][-3])
+                                output_row.append(question_dict[key_ques][-4])
                                 output_row.append(question_dict[key_ques][-2])
                                 output_row.append('NA')
                             else:
@@ -611,9 +611,10 @@ def crr_dict(c_name, e_name, mapping_dict_crr):
         question_dataframe = question_dataframe.append(question_partial)
         # question_dataframe = pd.concat([question_dataframe, question_partial])
     question_dataframe.rename(columns=mapping_dict_crr, inplace=True)
+    # question_dataframe = question_dataframe[['eed_id', 'exam_id', 'registration_no', 'question_no', 'exam_batch', 'mdm_name', 'crr_crct_key', 'file_date' ]]
     header_list = question_dataframe.columns.tolist()
-    question_csv_data = question_dataframe.values.tolist()
-    return question_dataframe, question_csv_data, header_list
+    # question_csv_data = question_dataframe.values.tolist()
+    return question_dataframe, header_list
 
 
 def main(list_of_folders):  # list of clients_exams
@@ -687,11 +688,15 @@ def main(list_of_folders):  # list of clients_exams
             del reg_temp, registration_dataframe, registration_partial, registration_csv_data,
 
         # CRR lookup
-        crr_dataframe, crr_data_list, crr_headers = crr_dict(client_name, exam_name, mapping_dict_crr)
+        crr_dataframe, crr_headers = crr_dict(client_name, exam_name, mapping_dict_crr)
         final_question_dict = {}
         count_list = []
         final_count_list = []
         if len(crr_headers) > 10:
+            crr_dataframe = crr_dataframe[
+                ['eed_id', 'exam_id', 'registration_no', 'question_no', 'exam_batch', 'mdm_name', 'crr_crct_key',
+                 'file_date']]
+            crr_data_list = crr_dataframe.values.tolist()
             eed_idx = crr_dataframe.columns.get_loc('eed_id')
             examid_idx = crr_dataframe.columns.get_loc('exam_id')
             qst_idx = crr_dataframe.columns.get_loc('question_no')
@@ -711,6 +716,7 @@ def main(list_of_folders):  # list of clients_exams
                 p = process_exod_file(x, final_question_dict, final_master_dict, final_registration_dict, reg_headers,
                                  count_list)
         else:
+            crr_data_list = crr_dataframe.values.tolist()
             examid_idx = crr_dataframe.columns.get_loc('exam_id')
             qst_idx = crr_dataframe.columns.get_loc('question_no')
             date_idx = crr_dataframe.columns.get_loc('file_date')
@@ -749,7 +755,7 @@ def move_to_archive(list_of_folders):
             shutil.move(src, dest)
 
 
-folders = glob.glob(base_dir + '\\PCGT_Tango')  # [!master]*
+folders = glob.glob(base_dir + '\\[!master]*')  # [!master]*
 main(folders)
 strt_time = datetime.datetime.now()
 log_message(
