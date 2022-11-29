@@ -755,7 +755,7 @@ def move_to_archive(list_of_folders):
             shutil.move(src, dest)
 
 
-folders = glob.glob(base_dir + '\\[!master]*')  # [!master]*
+folders = glob.glob(base_dir + '\\Konark_cgl')  # [!master]*
 main(folders)
 strt_time = datetime.datetime.now()
 log_message(

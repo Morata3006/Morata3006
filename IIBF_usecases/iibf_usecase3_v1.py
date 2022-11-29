@@ -153,7 +153,7 @@ def process_file(file_path, question_dict, master_dict, count_list, pwd_list):
                             output_row.extend(item)
                             if index != 0:
                                 input_csv_data[index - 1][-1] = input_csv_data[index-1][-1].replace('"', '')
-                                if input_csv_data[index-1][-1] == '00:00' and int(enrollment_id) in pwd_list:
+                                if input_csv_data[index-1][-1] == '00:00' and int(enrollment_id) in pwd_list:  # handling the 00:00 case
                                     input_csv_data[index-1][-1] = '02:40:00'
                                 elif input_csv_data[index-1][-1] == '00:00':
                                     input_csv_data[index - 1][-1] = '02:00:00'
@@ -167,7 +167,7 @@ def process_file(file_path, question_dict, master_dict, count_list, pwd_list):
                                 response_time = mod_timer - datetime.datetime.strptime(item[12], '%H:%M:%S')
                                 response_time_mins = round(response_time.total_seconds() / 60, 2)
                                 response_time_secs = response_time.total_seconds()
-                            else:
+                            else:  # handle the first record of the file
                                 if int(enrollment_id) in pwd_list:
                                     timer = '02:40:00'
                                 else:
