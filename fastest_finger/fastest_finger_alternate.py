@@ -9,6 +9,7 @@ from multiprocessing import Pool
 import pandas as pd
 import numpy as np
 # from memory_profiler import profile
+from statistics import mean
 import logging
 import calendar
 
@@ -82,11 +83,16 @@ def process_exod_file(file_path, question_dict, master_dict, registration_dict, 
             file_name = file.split("\\")[-1]
             read_files = []
             output_rows = []
+            error_files = []
+            pwd_list = []
 
             for sub_file in glob.glob(file + "\\*.log"):  # individual candidate log file
 
                 try:
                     unique_questions = {}
+                    timer_dict = {}
+                    response_min_list = []
+                    response_sec_list = []
                     exam_id = sub_file.split("\\")[-1].split("-")[0]  # SO711311*** (11 alphanumeric)
                     eed_id = sub_file.split("\\")[-1].split("-")[1]  # 218132 (6 digit)
                     dataframe = (
@@ -120,20 +126,17 @@ def process_exod_file(file_path, question_dict, master_dict, registration_dict, 
                     output_row = []
                     item = []
                     for index, item in enumerate(input_csv_data):
-                        if item[4] != -1 or item[9] == "Clicked on 'Clear Response' button.":
-                            item[0] = item[0].replace('INFO - "', "")
-                            item[13] = item[13].replace('"', "")
-                            unique_key = str(item[2])
-                            output_row = [client_id, exam_name, eed_id, exam_id, len(res)]
-                            output_row.extend(item)
-                            output_row.append(Value)
-                            output_row.append('Appeared-Attempted')
-                            unique_questions[unique_key] = output_row
-                            key_ques = str(client_id) + "_" + str(exam_id) + '_' + str(eed_id) + "_" + str(
-                                int(item[2]))  # diamond_examid_eedid_QuestionID
-                            key_master = str(client_id) + "_" + str(exam_id)  # diamond_examid
-                        else:
-                            continue
+                        item[0] = item[0].replace('INFO - "', "")
+                        item[13] = item[13].replace('"', "")
+                        unique_key = str(item[2])
+                        output_row = [client_id, exam_name, eed_id, exam_id, len(res)]
+                        output_row.extend(item)
+                        output_row.append(Value)
+                        output_row.append('Appeared-Attempted')
+                        unique_questions[unique_key] = output_row
+                        key_ques = str(client_id) + "_" + str(exam_id) + '_' + str(eed_id) + "_" + str(
+                            int(item[2]))  # diamond_examid_eedid_QuestionID
+                        key_master = str(client_id) + "_" + str(exam_id)  # diamond_examid
                         if key_ques in question_dict.keys():
                             output_row.append(question_dict[key_ques][-3])  # mdm name
                             output_row.append(question_dict[key_ques][-4])  # crr exam batch
@@ -178,6 +181,41 @@ def process_exod_file(file_path, question_dict, master_dict, registration_dict, 
                                 output_row.append(registration_dict[key_registration][col_headers.index('12th/HSC percentage')])  # HSC
                                 output_row.append(registration_dict[key_registration][col_headers.index('Graduation Percentage')])  # grad
                                 output_row.append(registration_dict[key_registration][col_headers.index('Post Applying For:')])  # Post applying
+                            else:
+                                output_row.extend(["nan"] * 9)
+                        else:
+                            output_row.extend(["nan"] * 17)
+                        if index != 0:  # response time block
+                            if input_csv_data[index - 1][-2] == '00:00' and int(eed_id) in pwd_list:  # handling the 00:00 case
+                                input_csv_data[index - 1][-2] = '03:40:00'
+                            elif input_csv_data[index - 1][-2] == '00:00':
+                                input_csv_data[index - 1][-2] = '03:00:00'
+                            if datetime.datetime.strptime(item[12], '%H:%M:%S') > datetime.datetime.strptime(
+                                    input_csv_data[index - 1][-2], '%H:%M:%S'):
+                                error_files.append(sub_file)
+                                mod_timer = datetime.datetime.strptime(item[12], '%H:%M:%S')
+                            else:
+                                mod_timer = datetime.datetime.strptime(input_csv_data[index - 1][-2], '%H:%M:%S')
+                            response_time = mod_timer - datetime.datetime.strptime(item[12], '%H:%M:%S')
+                            response_time_mins = round(response_time.total_seconds() / 60, 2)
+                            response_time_secs = response_time.total_seconds()
+                        else:  # handle the first record of the file
+                            if int(eed_id) in pwd_list:
+                                timer = '03:40:00'
+                            else:
+                                timer = '03:00:00'
+                            if datetime.datetime.strptime(item[12], '%H:%M:%S') > datetime.datetime.strptime(timer,'%H:%M:%S'):
+                                error_files.append(sub_file)
+                            response_time = datetime.datetime.strptime(timer, '%H:%M:%S') - datetime.datetime.strptime(item[12], '%H:%M:%S')
+                            response_time_mins = round(response_time.total_seconds() / 60, 2)
+                            response_time_secs = response_time.total_seconds()
+                        if str(item[2]) not in timer_dict.keys():  # timer dictionary with question and response time
+                            timer_dict[unique_key] = [response_time, response_time_mins, response_time_secs]
+                        else:
+                            timer_dict[unique_key][0] = timer_dict[unique_key][0] + response_time
+                            timer_dict[unique_key][1] = timer_dict[unique_key][1] + response_time_mins
+                            timer_dict[unique_key][2] = timer_dict[unique_key][2] + response_time_secs
+
                     if not output_row and item:  # for not attempted single row addition
                         if item[4] == -1:
                             item[0] = item[0].replace('INFO - "', "")
@@ -227,12 +265,31 @@ def process_exod_file(file_path, question_dict, master_dict, registration_dict, 
                                     output_row.append(registration_dict[key_registration][col_headers.index('12th/HSC percentage')])  # HSC
                                     output_row.append(registration_dict[key_registration][col_headers.index('Graduation Percentage')])  # grad
                                     output_row.append(registration_dict[key_registration][col_headers.index('Post Applying For:')])  # Post applying
+                                else:
+                                    output_row.extend(["nan"] * 9)
+                            else:
+                                output_row.extend(["nan"] * 17)
                     item.clear()
-                    unique_questions = {
-                        k: v
-                        for k, v in sorted(unique_questions.items(), key=lambda item: item[1])
-                    }
+                    # unique_questions = {
+                    #     k: v
+                    #     for k, v in sorted(unique_questions.items(), key=lambda item: item[1])
+                    # }
+                    for k in unique_questions.copy():
+                        if unique_questions[k][10] == -1.0:  # removing non attempted questions i.e. questions with -1 as final attempt
+                            del unique_questions[k]
+                        else:
+                            if k in timer_dict.keys():
+                                unique_questions[k].extend((timer_dict[k][0], timer_dict[k][1], timer_dict[k][2]))
                     sub_file_output_rows = [value for item, value in unique_questions.items()]
+                    for val in sub_file_output_rows:
+                        response_min_list.append(val[-2])
+                        response_sec_list.append(val[-1])
+
+                    response_avg_min = round(mean(response_min_list), 2) if response_min_list else 0.0
+                    response_avg_sec = round(mean(response_sec_list), 2) if response_sec_list else 0.0
+                    for line in sub_file_output_rows:
+                        line.append(response_avg_min)
+                        line.append(response_avg_sec)
                     output_rows.extend(sub_file_output_rows)
                     if sub_file_output_rows:
                         count_list.append(1)
@@ -286,6 +343,11 @@ def process_exod_file(file_path, question_dict, master_dict, registration_dict, 
                     "HSC percentage",
                     "Graduation percentage",
                     "Candidate Post details",
+                    "response_time",
+                    "response_time_mins",
+                    "response_time_secs",
+                    "avg_response_time_mins",
+                    "avg_response_time_secs",
                 ],
             )
 

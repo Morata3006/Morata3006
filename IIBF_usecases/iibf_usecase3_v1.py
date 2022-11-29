@@ -141,57 +141,57 @@ def process_file(file_path, question_dict, master_dict, count_list, pwd_list):
                     input_csv_data = dataframe.values.tolist()
                     item = []
                     for index, item in enumerate(input_csv_data):
-                        if item[4] != -1:
-                            item[0] = item[0].replace('INFO - "', "")
-                            item[12] = item[12].replace('"', '')
-                            if item[12] == '00:00' and int(enrollment_id) in pwd_list:
-                                item[12] = '02:40:00'
-                            elif item[12] == '00:00':
-                                item[12] = '02:00:00'
-                            unique_key = str(item[2])
-                            output_row = [client_id, enrollment_id, membership_no, len(res)]
-                            output_row.extend(item)
-                            if index != 0:
-                                input_csv_data[index - 1][-1] = input_csv_data[index-1][-1].replace('"', '')
-                                if input_csv_data[index-1][-1] == '00:00' and int(enrollment_id) in pwd_list:  # handling the 00:00 case
-                                    input_csv_data[index-1][-1] = '02:40:00'
-                                elif input_csv_data[index-1][-1] == '00:00':
-                                    input_csv_data[index - 1][-1] = '02:00:00'
-                                if datetime.datetime.strptime(item[12], '%H:%M:%S') > datetime.datetime.strptime(input_csv_data[index-1][-1], '%H:%M:%S'):
-                                    error_files.append(sub_file)
-                                    mod_timer = datetime.datetime.strptime(item[12], '%H:%M:%S')
-                                    # output_row.append(item[12])  # Previous Timer
-                                else:
-                                    mod_timer = datetime.datetime.strptime(input_csv_data[index-1][-1], '%H:%M:%S')
-                                    # output_row.append(input_csv_data[index - 1][-1])
-                                response_time = mod_timer - datetime.datetime.strptime(item[12], '%H:%M:%S')
-                                response_time_mins = round(response_time.total_seconds() / 60, 2)
-                                response_time_secs = response_time.total_seconds()
-                            else:  # handle the first record of the file
-                                if int(enrollment_id) in pwd_list:
-                                    timer = '02:40:00'
-                                else:
-                                    timer = '02:00:00'
-                                if datetime.datetime.strptime(item[12], '%H:%M:%S') > datetime.datetime.strptime(timer, '%H:%M:%S'):
-                                    error_files.append(sub_file)
-                                response_time = datetime.datetime.strptime(timer, '%H:%M:%S') - datetime.datetime.strptime(item[12], '%H:%M:%S')
-                                response_time_mins = round(response_time.total_seconds() / 60, 2)
-                                response_time_secs = response_time.total_seconds()
-                                # output_row.append(timer)
-                            output_row.append(Value)
-                            output_row.append('Appeared-Attempted')
-                            unique_questions[unique_key] = output_row
-                            if str(item[2]) not in timer_dict.keys():  # timer dictionary with question and response time
-                                timer_dict[unique_key] = [response_time, response_time_mins, response_time_secs]
+                        # if item[4] != -1:
+                        item[0] = item[0].replace('INFO - "', "")
+                        item[12] = item[12].replace('"', '')
+                        if item[12] == '00:00' and int(enrollment_id) in pwd_list:
+                            item[12] = '02:40:00'
+                        elif item[12] == '00:00':
+                            item[12] = '02:00:00'
+                        unique_key = str(item[2])
+                        output_row = [client_id, enrollment_id, membership_no, len(res)]
+                        output_row.extend(item)
+                        if index != 0:
+                            input_csv_data[index - 1][-1] = input_csv_data[index-1][-1].replace('"', '')
+                            if input_csv_data[index-1][-1] == '00:00' and int(enrollment_id) in pwd_list:  # handling the 00:00 case
+                                input_csv_data[index-1][-1] = '02:40:00'
+                            elif input_csv_data[index-1][-1] == '00:00':
+                                input_csv_data[index - 1][-1] = '02:00:00'
+                            if datetime.datetime.strptime(item[12], '%H:%M:%S') > datetime.datetime.strptime(input_csv_data[index-1][-1], '%H:%M:%S'):
+                                error_files.append(sub_file)
+                                mod_timer = datetime.datetime.strptime(item[12], '%H:%M:%S')
+                                # output_row.append(item[12])  # Previous Timer
                             else:
-                                timer_dict[unique_key][0] = timer_dict[unique_key][0] + response_time
-                                timer_dict[unique_key][1] = timer_dict[unique_key][1] + response_time_mins
-                                timer_dict[unique_key][2] = timer_dict[unique_key][2] + response_time_secs
-                            key_ques = str(output_row[0]) + "_" + str(output_row[1]) + "_" + str(
-                                int(output_row[6]))  # diamond_eedid_QuestionID
-                            key_master = str(output_row[0]) + "_" + str(output_row[2]) + "_" + str(output_row[1])
+                                mod_timer = datetime.datetime.strptime(input_csv_data[index-1][-1], '%H:%M:%S')
+                                # output_row.append(input_csv_data[index - 1][-1])
+                            response_time = mod_timer - datetime.datetime.strptime(item[12], '%H:%M:%S')
+                            response_time_mins = round(response_time.total_seconds() / 60, 2)
+                            response_time_secs = response_time.total_seconds()
+                        else:  # handle the first record of the file
+                            if int(enrollment_id) in pwd_list:
+                                timer = '02:40:00'
+                            else:
+                                timer = '02:00:00'
+                            if datetime.datetime.strptime(item[12], '%H:%M:%S') > datetime.datetime.strptime(timer, '%H:%M:%S'):
+                                error_files.append(sub_file)
+                            response_time = datetime.datetime.strptime(timer, '%H:%M:%S') - datetime.datetime.strptime(item[12], '%H:%M:%S')
+                            response_time_mins = round(response_time.total_seconds() / 60, 2)
+                            response_time_secs = response_time.total_seconds()
+                            # output_row.append(timer)
+                        output_row.append(Value)
+                        output_row.append('Appeared-Attempted')
+                        unique_questions[unique_key] = output_row
+                        if str(item[2]) not in timer_dict.keys():  # timer dictionary with question and response time
+                            timer_dict[unique_key] = [response_time, response_time_mins, response_time_secs]
                         else:
-                            continue
+                            timer_dict[unique_key][0] = timer_dict[unique_key][0] + response_time
+                            timer_dict[unique_key][1] = timer_dict[unique_key][1] + response_time_mins
+                            timer_dict[unique_key][2] = timer_dict[unique_key][2] + response_time_secs
+                        key_ques = str(output_row[0]) + "_" + str(output_row[1]) + "_" + str(
+                            int(output_row[6]))  # diamond_eedid_QuestionID
+                        key_master = str(output_row[0]) + "_" + str(output_row[2]) + "_" + str(output_row[1])
+                        # else:
+                        #     continue
                         if key_ques in question_dict.keys():
                             output_row.append(question_dict[key_ques][3])  # Medium Code
                             output_row.append("08:30-10:30")  # batch time
