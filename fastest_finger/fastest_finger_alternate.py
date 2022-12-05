@@ -14,8 +14,10 @@ import logging
 import calendar
 
 
-default_cols = ["Candidate ID", "Zone", "State", "City", "Test Center ID", "Venue Name", "Registration No.",
-                "Exam Date", "Exam Time", ]
+# default_cols = ["Candidate ID", "Zone", "State", "City", "Test Center ID", "Venue Name", "Registration No.",
+#                 "Exam Date", "Exam Time",]
+default_cols = ["Candidate ID", "Zone", "City", "Test Center ID", "Venue Name", "Registration No.",
+                "Exam Date", "Exam Time", "PWD",]
 
 base_dir = "C:\\Users\\ashetty\\Desktop\\S3_instance\\"
 input_dir = "fastestfinger\\raw\\"
@@ -84,7 +86,6 @@ def process_exod_file(file_path, question_dict, master_dict, registration_dict, 
             read_files = []
             output_rows = []
             error_files = []
-            pwd_list = []
 
             for sub_file in glob.glob(file + "\\*.log"):  # individual candidate log file
 
@@ -121,6 +122,9 @@ def process_exod_file(file_path, question_dict, master_dict, registration_dict, 
                             .reset_index(drop=True)
                     )
                     res = [i for i in list(dataframe['IPAddress']) if 'PC change' in i]
+                    idx = dataframe.query('Action.str.contains("Start The Test")', engine='python').index
+                    if list(idx):
+                        dataframe.drop(index=dataframe.index[:idx[0] + 1], inplace=True)
                     dataframe = dataframe.dropna()
                     input_csv_data = dataframe.values.tolist()
                     output_row = []
@@ -185,11 +189,13 @@ def process_exod_file(file_path, question_dict, master_dict, registration_dict, 
                                 output_row.extend(["nan"] * 9)
                         else:
                             output_row.extend(["nan"] * 17)
-                        if index != 0:  # response time block
-                            if input_csv_data[index - 1][-2] == '00:00' and int(eed_id) in pwd_list:  # handling the 00:00 case
+                        if index != 0:  # *************** response time block ******************
+                            if input_csv_data[index - 1][-2] == '00:00' and output_row[35] == 'Yes':  # handling the 00:00 case
                                 input_csv_data[index - 1][-2] = '03:40:00'
                             elif input_csv_data[index - 1][-2] == '00:00':
                                 input_csv_data[index - 1][-2] = '03:00:00'
+                            if item[12] == '00:00':
+                                item[12] = input_csv_data[index - 1][-2]
                             if datetime.datetime.strptime(item[12], '%H:%M:%S') > datetime.datetime.strptime(
                                     input_csv_data[index - 1][-2], '%H:%M:%S'):
                                 error_files.append(sub_file)
@@ -200,10 +206,12 @@ def process_exod_file(file_path, question_dict, master_dict, registration_dict, 
                             response_time_mins = round(response_time.total_seconds() / 60, 2)
                             response_time_secs = response_time.total_seconds()
                         else:  # handle the first record of the file
-                            if int(eed_id) in pwd_list:
+                            if output_row[35] == 'Yes':
                                 timer = '03:40:00'
                             else:
                                 timer = '03:00:00'
+                            if item[12] == '00:00':
+                                item[12] = '03:00:00'
                             if datetime.datetime.strptime(item[12], '%H:%M:%S') > datetime.datetime.strptime(timer,'%H:%M:%S'):
                                 error_files.append(sub_file)
                             response_time = datetime.datetime.strptime(timer, '%H:%M:%S') - datetime.datetime.strptime(item[12], '%H:%M:%S')
@@ -216,70 +224,72 @@ def process_exod_file(file_path, question_dict, master_dict, registration_dict, 
                             timer_dict[unique_key][1] = timer_dict[unique_key][1] + response_time_mins
                             timer_dict[unique_key][2] = timer_dict[unique_key][2] + response_time_secs
 
-                    if not output_row and item:  # for not attempted single row addition
-                        if item[4] == -1:
-                            item[0] = item[0].replace('INFO - "', "")
-                            item[13] = item[13].replace('"', "")
-                            output_row = [client_id, exam_name, eed_id, exam_id, len(res)]
-                            item[12] = '23:00:00'
-                            output_row.extend(item)
-                            output_row.append(Value)
-                            output_row.append('Appeared-Not-Attempted')
-                            unique_key = str(item[2])
-                            unique_questions[unique_key] = output_row
-                            key_ques = str(output_row[0]) + "_" + str(output_row[3]) + "_" + str(
-                                int(output_row[7]))  # diamond_examid_QuestionID
-                            key_master = str(output_row[0]) + "_" + str(output_row[3])
-                            if key_ques in question_dict.keys():
-                                output_row.append(question_dict[key_ques][-3])
-                                output_row.append(question_dict[key_ques][-4])
-                                output_row.append(question_dict[key_ques][-2])
-                                output_row.append('NA')
-                            else:
-                                output_row.extend(("nan", "nan", "nan", "nan"))
-                            if key_master in master_dict.keys():
-                                output_row.append(master_dict[key_master][1])  # zone
-                                output_row.append(master_dict[key_master][2])  # state
-                                output_row.append(master_dict[key_master][3])  # city
-                                output_row.append(master_dict[key_master][4])  # Test Centre ID
-                                output_row.append(master_dict[key_master][5])  # venue
-                                output_row.append(master_dict[key_master][6])  # reg no.
-                                if type(master_dict[key_master][7]) == str:  # exam date
-                                    format_date = datetime.datetime.strptime(master_dict[key_master][7], '%d/%m/%Y')
-                                    output_row.append(format_date)
-                                else:
-                                    output_row.append(master_dict[key_master][7])
-                                output_row.append(master_dict[key_master][8])  # exam time
-                                key_registration = client_id + '_' + master_dict[key_master][6]  # registration key
-                                if key_registration in registration_dict.keys():
-                                    output_row.append(registration_dict[key_registration][col_headers.index('Gender')])  # Gender
-                                    output_row.append(registration_dict[key_registration][col_headers.index('Category(Caste)')])  # Category
-                                    if str(registration_dict[key_registration][col_headers.index('Are you differently Abled?')]) != 'nan':
-                                        output_row.append("Yes")
-                                        output_row.append("30")
-                                    else:
-                                        output_row.append("No")
-                                        output_row.append("0")
-                                    output_row.append(registration_dict[key_registration][col_headers.index('Graduation Degree/Diploma Name')])
-                                    output_row.append(registration_dict[key_registration][col_headers.index('10th/SSC percentage')])  # SSC
-                                    output_row.append(registration_dict[key_registration][col_headers.index('12th/HSC percentage')])  # HSC
-                                    output_row.append(registration_dict[key_registration][col_headers.index('Graduation Percentage')])  # grad
-                                    output_row.append(registration_dict[key_registration][col_headers.index('Post Applying For:')])  # Post applying
-                                else:
-                                    output_row.extend(["nan"] * 9)
-                            else:
-                                output_row.extend(["nan"] * 17)
+                    # if not output_row and item:  # for not attempted single row addition
+                    #     if item[4] == -1:
+                    #         item[0] = item[0].replace('INFO - "', "")
+                    #         item[13] = item[13].replace('"', "")
+                    #         output_row = [client_id, exam_name, eed_id, exam_id, len(res)]
+                    #         item[12] = '23:00:00'
+                    #         output_row.extend(item)
+                    #         output_row.append(Value)
+                    #         output_row.append('Appeared-Not-Attempted')
+                    #         unique_key = str(item[2])
+                    #         unique_questions[unique_key] = output_row
+                    #         key_ques = str(output_row[0]) + "_" + str(output_row[3]) + "_" + str(
+                    #             int(output_row[7]))  # diamond_examid_QuestionID
+                    #         key_master = str(output_row[0]) + "_" + str(output_row[3])
+                    #         if key_ques in question_dict.keys():
+                    #             output_row.append(question_dict[key_ques][-3])
+                    #             output_row.append(question_dict[key_ques][-4])
+                    #             output_row.append(question_dict[key_ques][-2])
+                    #             output_row.append('NA')
+                    #         else:
+                    #             output_row.extend(("nan", "nan", "nan", "nan"))
+                    #         if key_master in master_dict.keys():
+                    #             output_row.append(master_dict[key_master][1])  # zone
+                    #             output_row.append(master_dict[key_master][2])  # state
+                    #             output_row.append(master_dict[key_master][3])  # city
+                    #             output_row.append(master_dict[key_master][4])  # Test Centre ID
+                    #             output_row.append(master_dict[key_master][5])  # venue
+                    #             output_row.append(master_dict[key_master][6])  # reg no.
+                    #             if type(master_dict[key_master][7]) == str:  # exam date
+                    #                 format_date = datetime.datetime.strptime(master_dict[key_master][7], '%d/%m/%Y')
+                    #                 output_row.append(format_date)
+                    #             else:
+                    #                 output_row.append(master_dict[key_master][7])
+                    #             output_row.append(master_dict[key_master][8])  # exam time
+                    #             key_registration = client_id + '_' + master_dict[key_master][6]  # registration key
+                    #             if key_registration in registration_dict.keys():
+                    #                 output_row.append(registration_dict[key_registration][col_headers.index('Gender')])  # Gender
+                    #                 output_row.append(registration_dict[key_registration][col_headers.index('Category(Caste)')])  # Category
+                    #                 if str(registration_dict[key_registration][col_headers.index('Are you differently Abled?')]) != 'nan':
+                    #                     output_row.append("Yes")
+                    #                     output_row.append("30")
+                    #                 else:
+                    #                     output_row.append("No")
+                    #                     output_row.append("0")
+                    #                 output_row.append(registration_dict[key_registration][col_headers.index('Graduation Degree/Diploma Name')])
+                    #                 output_row.append(registration_dict[key_registration][col_headers.index('10th/SSC percentage')])  # SSC
+                    #                 output_row.append(registration_dict[key_registration][col_headers.index('12th/HSC percentage')])  # HSC
+                    #                 output_row.append(registration_dict[key_registration][col_headers.index('Graduation Percentage')])  # grad
+                    #                 output_row.append(registration_dict[key_registration][col_headers.index('Post Applying For:')])  # Post applying
+                    #             else:
+                    #                 output_row.extend(["nan"] * 9)
+                    #         else:
+                    #             output_row.extend(["nan"] * 17)
                     item.clear()
                     # unique_questions = {
                     #     k: v
                     #     for k, v in sorted(unique_questions.items(), key=lambda item: item[1])
                     # }
                     for k in unique_questions.copy():
-                        if unique_questions[k][10] == -1.0:  # removing non attempted questions i.e. questions with -1 as final attempt
+                        if unique_questions[k][10] == -1.0 and len(unique_questions) != 1:  # removing non attempted questions i.e. questions with -1 as final attempt
                             del unique_questions[k]
                         else:
                             if k in timer_dict.keys():
                                 unique_questions[k].extend((timer_dict[k][0], timer_dict[k][1], timer_dict[k][2]))
+                                if len(unique_questions) == 1:
+                                    unique_questions[k][20] = 'Appeared-Not-Attempted'
                     sub_file_output_rows = [value for item, value in unique_questions.items()]
                     for val in sub_file_output_rows:
                         response_min_list.append(val[-2])
@@ -296,7 +306,11 @@ def process_exod_file(file_path, question_dict, master_dict, registration_dict, 
 
                 except Exception as ex:
                     traceback.print_exc()
-                    print(eed_id)
+                    log_message(
+                        "Traceback file name " + sub_file,
+                        "error",
+                        "system_log",
+                    )
                     continue
             output_rows.insert(
                 0,
@@ -687,8 +701,8 @@ def main(list_of_folders):  # list of clients_exams
         exam_name = folder.split("\\")[-1].split('_')[1]
         files = [file for file in list_of_files if "Master" not in file and "Exception" not in file]
         for i in list_of_files:
-            diamond_rack_name = i.split('\\')[-1]
-            create_output_files(client_name, diamond_rack_name, exam_name)
+            store_rack_name = i.split('\\')[-1]
+            create_output_files(client_name, store_rack_name, exam_name)
 
         calendar_dict = {str(index).zfill(2): month.upper() for index, month in enumerate(calendar.month_abbr) if month}
 
@@ -767,7 +781,7 @@ def main(list_of_folders):  # list of clients_exams
                 item in crr_data_list]  # diamond_examid_eedid_qstno
             del crr_data_list, crr_dataframe, crr_temp
             # with Pool(2) as pool:
-            #     p = pool.starmap(process_file, zip(files, repeat(final_question_dict), repeat(final_master_dict), repeat(final_registration_dict), repeat(reg_headers),  repeat(count_list)))
+            #     p = pool.starmap(process_exod_file, zip(files, repeat(final_question_dict), repeat(final_master_dict), repeat(final_registration_dict), repeat(reg_headers),  repeat(count_list)))
             #     final_count_list.extend(p)
             #     pool.close()
             #     pool.terminate()
@@ -787,7 +801,7 @@ def main(list_of_folders):  # list of clients_exams
                 item in crr_data_list]  # diamond_examid_qstno
             del crr_data_list, crr_dataframe, crr_temp
             # with Pool(2) as pool:
-            #     p = pool.starmap(process_file, zip(files, repeat(final_question_dict), repeat(final_master_dict), repeat(final_registration_dict), repeat(reg_headers), repeat(calendar_dict), repeat(count_list)))
+            #     p = pool.starmap(process_aexod_file, zip(files, repeat(final_question_dict), repeat(final_master_dict), repeat(final_registration_dict), repeat(reg_headers), repeat(calendar_dict), repeat(count_list)))
             #     final_count_list.extend(p)
             #     pool.close()
             #     pool.terminate()
